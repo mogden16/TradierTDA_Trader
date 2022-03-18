@@ -1,18 +1,14 @@
-from pathlib import Path
 from pymongo import MongoClient
-from dotenv import load_dotenv
 import os
 import certifi
+import config
+
 ca = certifi.where()
 
 THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
-path = Path(THIS_FOLDER)
-
-load_dotenv(dotenv_path=f"{path.parent}/config.env")
-
-MONGO_URI = os.getenv('MONGO_URI')
-RUN_LIVE_TRADER = True if os.getenv('RUN_LIVE_TRADER') == "True" else False
+MONGO_URI = config.MONGO_URI
+RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 
 
 class MongoDB:
@@ -51,7 +47,9 @@ class MongoDB:
 
                 self.queue = self.db["queue"]
 
-                self.forbidden = self.db["forbidden"]
+                self.analysis = self.db["analysis"]
+
+                self.alert_history = self.db["alert_history"]
 
                 self.logger.info("CONNECTED TO MONGO!\n", extra={'log': False})
 
@@ -66,3 +64,28 @@ class MongoDB:
             self.logger.error(f"FAILED TO CONNECT TO MONGO! - {e}")
 
             return False
+
+    # def disconnect(self):
+    #
+    #     try:
+    #
+    #         self.logger.info("DISCONNECTING FROM MONGO...", extra={'log': False})
+    #
+    #         if MONGO_URI != None:
+    #
+    #             self.client = MongoClient(
+    #                 MONGO_URI, authSource="admin", tlsCAFile=ca)
+    #
+    #             self.client.close()
+    #
+    #             return False
+    #
+    #         else:
+    #
+    #             raise Exception("MISSING MONGO URI")
+    #
+    #     except Exception as e:
+    #
+    #         self.logger.error(f"FAILED TO CONNECT TO MONGO! - {e}")
+    #
+    #         return False

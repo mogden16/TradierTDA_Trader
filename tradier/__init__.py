@@ -7,7 +7,7 @@ from assets.helper_functions import modifiedAccountID
 from assets.exception_handler import exception_handler
 
 
-class TDAmeritrade:
+class Tradier:
 
     def __init__(self, mongo, user, account_id, logger, push_notification):
 
@@ -35,21 +35,21 @@ class TDAmeritrade:
     def initialConnect(self):
 
         self.logger.info(
-            f"CONNECTING {self.user['Name']} TO TDAMERITRADE ({modifiedAccountID(self.account_id)})", extra={'log': False})
+            f"CONNECTING {self.user['Name']} TO TRADIER API ({modifiedAccountID(self.account_id)})", extra={'log': False})
 
         isValid = self.checkTokenValidity()
 
         if isValid:
 
             self.logger.info(
-                f"CONNECTED {self.user['Name']} TO TDAMERITRADE ({modifiedAccountID(self.account_id)})", extra={'log': False})
+                f"CONNECTED {self.user['Name']} TO TRADIER API ({modifiedAccountID(self.account_id)})", extra={'log': False})
 
             return True
 
         else:
 
             self.logger.error(
-                f"FAILED TO CONNECT {self.user['Name']} TO TDAMERITRADE ({self.account_id})", extra={'log': False})
+                f"FAILED TO CONNECT {self.user['Name']} TO TRADIER API ({self.account_id})", extra={'log': False})
 
             return False
 
@@ -327,7 +327,7 @@ class TDAmeritrade:
             id ([int]): ORDER ID FOR ORDER
 
         Returns:
-            [json]: RESPONSE. LOOKING FOR STATUS CODE 200,201   
+            [json]: RESPONSE. LOOKING FOR STATUS CODE 200,201
         """
 
         url = f"https://api.tdameritrade.com/v1/accounts/{self.account_id}/orders/{id}"

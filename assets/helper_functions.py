@@ -1,16 +1,12 @@
 from datetime import datetime
-from dotenv import load_dotenv
-from pathlib import Path
 import os
 import pytz
+import config
+
 
 THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
-path = Path(THIS_FOLDER)
-
-load_dotenv(dotenv_path=f"{path.parent}/config.env")
-
-TIMEZONE = os.getenv('TIMEZONE')
+TIMEZONE = config.TIMEZONE
 
 
 def getDatetime():
@@ -74,3 +70,42 @@ def selectSleep():
 def modifiedAccountID(account_id):
 
     return '*' * (len(str(account_id)) - 4) + str(account_id)[-4:]
+
+def formatGmailAlerts(trade_data):
+
+    trade_data_list = []
+
+    for data in trade_data:
+
+        hedge = False
+        symbol = data['Symbol']
+        pre_symbol = data['Pre_Symbol']
+        datetime_object = data['Exp_Date']
+        exp_month = '%02d' % datetime_object.month
+        exp_day = '%02d' % datetime_object.day
+        option_type = data['Option_Type']
+        strategy = data['Strategy']
+
+        if option_type == "CALL":
+            strike_price = pre_symbol.split('C')
+            strike_price = strike_price[-1]
+        else:
+            strike_price = pre_symbol.split('P')
+            strike_price = strike_price[-1]
+
+        obj = {
+            "Symbol": symbol,
+            "Side": "BUY_TO_OPEN",
+            "Pre_Symbol": pre_symbol,
+            "Exp_Date": f'2022-{exp_month}-{exp_day}',
+            "Strike_Price": strike_price,
+            "Option_Type": option_type,
+            "Strategy": strategy,
+            "Asset_Type": "OPTION",
+            "HedgeAlert": "TRUE" if hedge else "FALSE",
+            "Entry_Date": getDatetime()
+        }
+
+        trade_data_list.append(obj)
+
+    return trade_data_list

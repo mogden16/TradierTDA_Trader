@@ -1,27 +1,26 @@
+import discord.discord_helpers
 from assets.helper_functions import getDatetime, modifiedAccountID
 from api_trader.tasks import Tasks
+from websocket.stream import TDWebsocket
 from threading import Thread
 from assets.exception_handler import exception_handler
 from api_trader.order_builder import OrderBuilder
-from dotenv import load_dotenv
-from pathlib import Path
 import os
 from pymongo.errors import WriteError, WriteConcernError
 import traceback
-import time
 from random import randint
+import time
+import config
+from discord import discord_helpers
 
 
 THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
-path = Path(THIS_FOLDER)
+RUN_TASKS = True if config.RUN_TASKS else False
+RUN_WEBSOCKET = True if config.RUN_WEBSOCKET else False
+RUN_LIVE_TRADER = True if config.RUN_LIVE_TRADER else False
 
-load_dotenv(dotenv_path=f"{path.parent}/config.env")
-
-RUN_TASKS = True if os.getenv('RUN_TASKS') == "True" else False
-
-
-class ApiTrader(Tasks, OrderBuilder):
+class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
     def __init__(self, user, mongo, push, logger, account_id, tdameritrade):
         """
@@ -34,8 +33,8 @@ class ApiTrader(Tasks, OrderBuilder):
             asset_type ([str]): [ACCOUNT ASSET TYPE (EQUITY, OPTIONS)]
         """
 
-        self.RUN_LIVE_TRADER = True if user["Accounts"][str(
-            account_id)]["Account_Position"] == "Live" else False
+        self.RUN_LIVE_TRADER = str(user["Accounts"][str(
+            account_id)]["Account_Position"]).upper() == "LIVE"
 
         self.tdameritrade = tdameritrade
 
@@ -69,16 +68,23 @@ class ApiTrader(Tasks, OrderBuilder):
 
         Tasks.__init__(self)
 
+        TDWebsocket.__init__(self)
+
         # If user wants to run tasks
         if RUN_TASKS:
 
             Thread(target=self.runTasks, daemon=True).start()
 
-        else:
+        if RUN_WEBSOCKET:
+
+            Thread(target=self.runWebsocket, daemon=True).start()
+
+        if not RUN_WEBSOCKET and not RUN_TASKS:
 
             self.logger.info(
                 f"NOT RUNNING TASKS FOR {self.user['Name']} ({modifiedAccountID(self.account_id)})\n", extra={'log': False})
 
+        time.sleep(.5)  # SLEEPS FOR .5 SO THAT IT CAN STATE RUN_WEBSOCKET FIRST
         self.logger.info(
             f"RUNNING {user['Accounts'][str(account_id)]['Account_Position'].upper()} TRADER ({modifiedAccountID(self.account_id)})\n")
 
@@ -94,14 +100,40 @@ class ApiTrader(Tasks, OrderBuilder):
 
         order_type = strategy_object["Order_Type"]
 
-        if order_type == "STANDARD":
+        if RUN_LIVE_TRADER:
+
+            if RUN_WEBSOCKET:
+
+                order, obj = self.standardOrder(
+                    trade_data, strategy_object, direction)
+
+                disclosure = f'\n You have RUN_LIVE_TRADER: {RUN_LIVE_TRADER} & ' \
+                      f'RUN_WEBSOCKET: {RUN_WEBSOCKET} \n' \
+                      f'IF YOUR PROGRAM STOPS, YOUR ORDERS WONT EXIT'
+                print(disclosure)
+                discord_helpers.send_discord_alert(disclosure)
+
+            elif not RUN_WEBSOCKET:
+
+                if order_type == "OCO":
+
+                    order, obj = self.OCOorder(
+                        trade_data, strategy_object, direction)
+
+                elif order_type == "TRAIL":
+
+                    order, obj = self.TRAILorder(
+                        trade_data, strategy_object, direction)
+
+                else:
+
+                    order, obj = self.standardOrder(
+                        trade_data, strategy_object, direction)
+
+        else:
 
             order, obj = self.standardOrder(
                 trade_data, strategy_object, direction)
-
-        elif order_type == "OCO":
-
-            order, obj = self.OCOorder(trade_data, strategy_object, direction)
 
         if order == None and obj == None:
 
@@ -147,11 +179,18 @@ class ApiTrader(Tasks, OrderBuilder):
 
         obj["Order_Status"] = "QUEUED"
 
+        obj['Strike_Price'] = trade_data['Strike_Price']
+
+        obj['isRunner'] = trade_data['isRunner']
+
         self.queueOrder(obj)
 
         response_msg = f"{'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}: {side} Order for Symbol {symbol} ({modifiedAccountID(self.account_id)})"
 
         self.logger.info(response_msg)
+
+        discord_queue_message_to_push = {"content": f":eyes: TradingBOT just Queued \n Side: {side} \n Symbol: {pre_symbol} \n :eyes: Account Position: {'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}"}
+        discord_helpers.send_discord_alert(discord_queue_message_to_push)
 
     # STEP TWO
     @exception_handler
@@ -284,7 +323,6 @@ class ApiTrader(Tasks, OrderBuilder):
 
             shares = int(queue_order["Qty"])
 
-        price = round(price, 2) if price >= 1 else round(price, 4)
 
         strategy = queue_order["Strategy"]
 
@@ -295,6 +333,14 @@ class ApiTrader(Tasks, OrderBuilder):
         position_size = queue_order["Position_Size"]
 
         asset_type = queue_order["Asset_Type"]
+
+        if asset_type == "OPTION":
+
+            price = round(price, 2)
+
+        else:
+
+            price = round(price, 2) if price >= 1 else round (price, 4)
 
         position_type = queue_order["Position_Type"]
 
@@ -321,9 +367,21 @@ class ApiTrader(Tasks, OrderBuilder):
 
             obj["Pre_Symbol"] = queue_order["Pre_Symbol"]
 
+            pre_symbol = queue_order["Pre_Symbol"]
+
             obj["Exp_Date"] = queue_order["Exp_Date"]
 
             obj["Option_Type"] = queue_order["Option_Type"]
+
+            obj["Strike_Price"] = queue_order["Strike_Price"]
+
+            obj['isRunner'] = queue_order["isRunner"]
+
+            obj['Bid_Price'] = price
+
+            obj['Ask_Price'] = price
+
+            obj['Last_Price'] = price
 
         collection_insert = None
 
@@ -337,9 +395,18 @@ class ApiTrader(Tasks, OrderBuilder):
 
             obj["Entry_Date"] = getDatetime()
 
+            obj["Max_Price"] = price
+
+            obj["Trail_Stop_Value"] = price * float(os.getenv('TRAIL_STOP_PERCENTAGE'))
+
             collection_insert = self.open_positions.insert_one
 
-            message_to_push = f">>>> \n Side: {side} \n Symbol: {symbol} \n Qty: {shares} \n Price: ${price} \n Strategy: {strategy} \n Asset Type: {asset_type} \n Date: {getDatetime()} \n Trader: {self.user['Name']} \n Account Position: {'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}"
+            discord_message_to_push = f":rocket: TradingBOT just opened \n " \
+                                      f"Side: {side} \n Symbol: {pre_symbol} \n " \
+                                      f"Qty: {shares} \n Price: ${price} \n " \
+                                      f"Strategy: {strategy} \n Asset Type: {asset_type} \n " \
+                                      f"Date: {getDatetime()} \n " \
+                                      f":rocket: Account Position: {'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}"
 
         elif direction == "CLOSE POSITION":
 
@@ -363,7 +430,15 @@ class ApiTrader(Tasks, OrderBuilder):
 
             collection_insert = self.closed_positions.insert_one
 
-            message_to_push = f"____ \n Side: {side} \n Symbol: {symbol} \n Qty: {position['Qty']} \n Entry Price: ${position['Entry_Price']} \n Entry Date: {position['Entry_Date']} \n Exit Price: ${price} \n Exit Date: {getDatetime()} \n Strategy: {strategy} \n Asset Type: {asset_type} \n Trader: {self.user['Name']} \n Account Position: {'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}"
+            discord_message_to_push = f":closed_book: TradingBOT just closed \n " \
+                                      f"Side: {side} \n Symbol: {pre_symbol} \n " \
+                                      f"Qty: {position['Qty']} \n " \
+                                      f"Entry Price: ${position['Entry_Price']} \n " \
+                                      f"Entry Date: {position['Entry_Date']} \n " \
+                                      f"Exit Price: ${price} \n Exit Date: {getDatetime()} \n " \
+                                      f"Strategy: {strategy} \n Asset Type: {asset_type} \n " \
+                                      f":closed_book: Account Position: " \
+                                      f"{'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}"
 
             # REMOVE FROM OPEN POSITIONS
             is_removed = self.open_positions.delete_one(
@@ -417,7 +492,7 @@ class ApiTrader(Tasks, OrderBuilder):
         self.queue.delete_one({"Trader": self.user["Name"], "Symbol": symbol,
                                "Strategy": strategy, "Account_ID": self.account_id})
 
-        self.push.send(message_to_push)
+        discord_helpers.send_discord_alert(discord_message_to_push)
 
     # RUN TRADER
     @exception_handler

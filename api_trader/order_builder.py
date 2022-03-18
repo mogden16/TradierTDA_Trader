@@ -1,19 +1,19 @@
 # imports
 from assets.helper_functions import getDatetime
-from dotenv import load_dotenv
-from pathlib import Path
 import os
+import config
+import traceback
 
 THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
-path = Path(THIS_FOLDER)
-
-load_dotenv(dotenv_path=f"{path.parent}/config.env")
-
-BUY_PRICE = os.getenv('BUY_PRICE')
-SELL_PRICE = os.getenv('SELL_PRICE')
-TAKE_PROFIT_PERCENTAGE = float(os.getenv('TAKE_PROFIT_PERCENTAGE'))
-STOP_LOSS_PERCENTAGE = float(os.getenv('STOP_LOSS_PERCENTAGE'))
+IS_TESTING = config.IS_TESTING
+BUY_PRICE = config.BUY_PRICE
+SELL_PRICE = config.SELL_PRICE
+TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
+STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
+TRAIL_STOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
+RUNNER_FACTOR = config.RUNNER_FACTOR
+RUN_WEBSOCKET = config.RUN_WEBSOCKET
 
 
 class OrderBuilder:
@@ -21,7 +21,7 @@ class OrderBuilder:
     def __init__(self):
 
         self.order = {
-            "orderType": "LIMIT",
+            "orderType": None,
             "price": None,
             "session": None,
             "duration": None,
@@ -54,6 +54,16 @@ class OrderBuilder:
         }
 
     def standardOrder(self, trade_data, strategy_object, direction, OCOorder=False):
+
+        isRunner = trade_data['isRunner']
+
+        if isRunner == "TRUE":
+
+            runnerFactor = RUNNER_FACTOR
+
+        else:
+
+            runnerFactor = 1
 
         symbol = trade_data["Symbol"]
 
@@ -102,17 +112,39 @@ class OrderBuilder:
 
             self.order["orderLegCollection"][0]["instrument"]["putCall"] = trade_data["Option_Type"]
 
-        # GET QUOTE FOR SYMBOL
-        resp = self.tdameritrade.getQuote(
-            symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"])
+            self.obj["isRunner"] = trade_data["isRunner"]
 
-        price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][BUY_PRICE]) if side in ["BUY", "BUY_TO_OPEN", "BUY_TO_CLOSE"] else float(
-            resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
+        # GET QUOTE FOR SYMBOL
+        if not IS_TESTING:
+
+            try:
+                resp = self.tdameritrade.getQuote(
+                    symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"])
+
+                price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][BUY_PRICE]) if side in ["BUY", "BUY_TO_OPEN", "BUY_TO_CLOSE"] else float(
+                    resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
+
+                if list(resp.keys())[0] == "error":
+                    print(f'error scanning for {symbol}') if asset_type == "EQUITY" else (
+                        f'error scanning for {trade_data["Pre_Symbol"]}')
+                    self.error += 1
+                    return
+
+            except Exception:
+
+                msg = f"error: {traceback.format_exc()}"
+
+                self.logger.error(msg)
+
+        else:
+
+            price = 1
+
 
         # OCO ORDER NEEDS TO USE ASK PRICE FOR ISSUE WITH THE ORDER BEING TERMINATED UPON BEING PLACED
         if OCOorder:
 
-            price = float(resp[symbol  if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
+            price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
 
         self.order["price"] = round(
             price, 2) if price >= 1 else round(price, 4)
@@ -120,12 +152,14 @@ class OrderBuilder:
         # IF OPENING A POSITION
         if direction == "OPEN POSITION":
 
-            position_size = int(strategy_object["Position_Size"])
+            position_size = int(strategy_object["Position_Size"]) * runnerFactor
 
             shares = int(
                 position_size/price) if asset_type == "EQUITY" else int((position_size / 100)/price)
 
             if strategy_object["Active"] and shares > 0:
+
+                self.order["orderType"] = "LIMIT"
 
                 self.order["orderLegCollection"][0]["quantity"] = shares
 
@@ -146,6 +180,14 @@ class OrderBuilder:
 
         # IF CLOSING A POSITION
         elif direction == "CLOSE POSITION":
+
+            if RUN_WEBSOCKET:
+
+                self.order["orderType"] = "MARKET"
+
+            else:
+
+                self.order["orderType"] = "LIMIT"
 
             self.order["orderLegCollection"][0]["quantity"] = trade_data["Qty"]
 
@@ -236,5 +278,62 @@ class OrderBuilder:
                 ]
             }
         ]
+
+        return order, obj
+
+
+    def TRAILorder(self, trade_data, strategy_object, direction):
+
+        order, obj = self.standardOrder(
+            trade_data, strategy_object, direction)
+
+        asset_type = "OPTION" if "Pre_Symbol" in trade_data else "EQUITY"
+
+        side = trade_data["Side"]
+
+        stop_price_offset = (round(
+            (order["price"]*TRAIL_STOP_PERCENTAGE), 2) if asset_type == "OPTION" else round(order["price"]*TRAIL_STOP_PERCENTAGE, 4))
+
+        #####################################
+        if side == "BUY_TO_OPEN":
+
+            instruction = "SELL_TO_CLOSE"
+
+        elif side == "BUY":
+
+            instruction = "SELL"
+
+        elif side == "SELL":
+
+            instruction = "BUY"
+
+        elif side == "SELL_TO_OPEN":
+
+            instruction = "BUY_TO_CLOSE"
+        #####################################
+
+        order["orderStrategyType"] = "TRIGGER"
+
+        order["childOrderStrategies"] = [
+                    {
+                        "orderStrategyType": "SINGLE",
+                        "session": "NORMAL",
+                        "duration": "GOOD_TILL_CANCEL",
+                        "orderType": "TRAILING_STOP",
+                        "stopPriceLinkBasis": "ASK",
+                        "stopPriceLinkType": "VALUE",
+                        "stopPriceOffset": stop_price_offset,
+                        "orderLegCollection": [
+                            {
+                                "instruction": instruction,
+                                "quantity": obj["Qty"],
+                                "instrument": {
+                                    "assetType": asset_type,
+                                    "symbol": trade_data["Symbol"] if asset_type == "EQUITY" else trade_data["Pre_Symbol"]
+                                }
+                            }
+                        ]
+                    }
+            ]
 
         return order, obj

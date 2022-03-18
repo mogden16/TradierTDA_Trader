@@ -1,22 +1,13 @@
 
 # imports
 import time
-from dotenv import load_dotenv
-from pathlib import Path
-import os
+import config
 
 from assets.exception_handler import exception_handler
 from assets.helper_functions import getDatetime, selectSleep, modifiedAccountID
 
-THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
-
-path = Path(THIS_FOLDER)
-
-load_dotenv(dotenv_path=f"{path.parent}/config.env")
-
-TAKE_PROFIT_PERCENTAGE = float(os.getenv('TAKE_PROFIT_PERCENTAGE'))
-STOP_LOSS_PERCENTAGE = float(os.getenv('STOP_LOSS_PERCENTAGE'))
-
+TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
+STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
 
 class Tasks:
 
