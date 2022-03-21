@@ -1,5 +1,6 @@
 from pymongo import MongoClient
 import certifi
+import config
 
 ca = certifi.where()
 

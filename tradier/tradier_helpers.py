@@ -31,8 +31,7 @@ def streamPrice(trader):
         for order in queue:
             pre_symbol = order['Pre_Symbol']
             queued_orders.append(pre_symbol)
-        print(f'Queued Positions: {queued_orders}')
-        return
+            print(f'Queued Positions: {queued_orders}')
 
     for open_position in open_positions:
         id = open_position['_id']
@@ -279,7 +278,7 @@ def streamPrice(trader):
 
                         if current_price < trailstop_price:
                             print('current_price is lower than trailstop price, closing position')
-                            trader.buy_order(open_position, trade_signal="CLOSE")
+                            trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
                             if not RUN_LIVE_TRADER:
                                 trader.buy_order(open_position, trade_signal=None)
 
@@ -287,7 +286,7 @@ def streamPrice(trader):
                         print('error with streaming positions')
 
                     if current_price < stoploss_price:
-                        trader.buy_order(open_position, trade_signal="CLOSE")
+                        trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
                         if not RUN_LIVE_TRADER:
                             trader.buy_order(open_position, trade_signal=None)
 
