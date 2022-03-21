@@ -200,7 +200,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
         obj['isRunner'] = trade_data['isRunner']
 
-        self.mongo.queue.insert_one(obj)
+        self.queueOrder(obj)
 
         response_msg = f"{'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}: {side} Order for Symbol {symbol} ({modifiedAccountID(self.account_id)})"
 
@@ -208,8 +208,6 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
         discord_queue_message_to_push = f":eyes: TradingBOT just Queued \n Side: {side} \n Symbol: {pre_symbol} \n :eyes: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
         discord_helpers.send_discord_alert(discord_queue_message_to_push)
-
-        self.updateStatus()
 
     # STEP TWO
     @exception_handler

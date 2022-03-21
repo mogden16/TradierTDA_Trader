@@ -5,8 +5,6 @@ import logging
 ca = certifi.where()
 
 # MONGO_URI = config.MONGO_URI
-MONGO_URI = 'mongodb+srv://mogden16:Yankees16!@cluster1.6jzau.mongodb.net/Api_Trader?retryWrites=true&w=majority'
-
 
 class MongoFunctions:
     def __init__(self):

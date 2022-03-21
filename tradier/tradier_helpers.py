@@ -3,7 +3,7 @@ import traceback
 
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 IS_TESTING = config.IS_TESTING
-STREAMPRICE_LINK = config.STREAMPRICE_LINK
+STREAMPRICE_LINK = config.STREAMPRICE_LINK.upper()
 TAKEPROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
 STOPLOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
 TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
@@ -138,7 +138,7 @@ def streamPrice(trader):
 
             elif order_type == "CUSTOM":
 
-                trader.open_positions.update_one({"_id": id}, {"$set": {'Current_Price': current_price}}, upsert=True)
+                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Current_Price': current_price}}, upsert=True)
                 max_price = open_position['Max_Price']
                 trailstop_price = round(max_price - trail_stop_value, 2)
 
@@ -182,7 +182,7 @@ def streamPrice(trader):
 
             elif order_type == "CUSTOM2":
 
-                trader.open_positions.update_one({"_id": id}, {"$set": {'Current_Price': current_price}}, upsert=True)
+                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Current_Price': current_price}}, upsert=True)
                 max_price = open_position['Max_Price']
                 trailstop_price = round(max_price - trail_stop_value, 2)
 

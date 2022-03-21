@@ -426,7 +426,6 @@ class Main:
                             self.buy_order(value, trade_signal="BUY", trade_type="LIMIT")
                             c.DONTTRADELIST.append(value)
 
-
             else:
                 buy_signal = True
                 for value in c.OPTIONLIST:
@@ -445,7 +444,6 @@ class Main:
 
             if RUN_WEBSOCKET:
                 tradier_helpers.streamPrice(self)
-
 
             if main.error > 0:
                 print('errors', main.error)
