@@ -119,6 +119,8 @@ class tradierOrderBuilder:
 
             self.order['price'] = str(price)
 
+            self.obj['Price'] = str(price)
+
         position_size = int((strategy_object["Position_Size"]) * runnerFactor)
 
         self.obj['Position_Size'] = position_size

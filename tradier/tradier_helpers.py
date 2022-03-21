@@ -27,11 +27,11 @@ def streamPrice(trader):
         return
 
     elif len(queue) != 0:
-        queued_orders = []
         for order in queue:
             pre_symbol = order['Pre_Symbol']
-            queued_orders.append(pre_symbol)
-            print(f'Queued Positions: {queued_orders}')
+            price = order['Price']
+            current_price = trader.tradier.get_quote(order)['lastPrice']
+            print(f'Queued Position: {pre_symbol}  order_price: {price}  current_price: {current_price} \n')
 
     for open_position in open_positions:
         id = open_position['_id']
@@ -108,8 +108,8 @@ def streamPrice(trader):
                         trader.buy_order(open_position, trade_signal=None)
 
                 elif current_price <= stoploss_price:
-                    print('max_price exceeds StopLoss price, closing position')
-                    trader.buy_order(open_position, trade_signal="CLOSE")
+                    print('current_price exceeds StopLoss price, closing position')
+                    trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
                     if not RUN_LIVE_TRADER:
                         trader.buy_order(open_position, trade_signal=None)
 
@@ -130,7 +130,7 @@ def streamPrice(trader):
 
                 elif current_price < trailstop_price:
                     print('current_price is lower than trailstop price, closing position')
-                    trader.buy_order(open_position, trade_signal="CLOSE")
+                    trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
                     if not RUN_LIVE_TRADER:
                         trader.buy_order(open_position, trade_signal=None)
 
@@ -151,11 +151,11 @@ def streamPrice(trader):
                         trader.buy_order(open_position, trade_signal="CLOSE")
                         if not RUN_LIVE_TRADER:
                             trader.buy_order(open_position, trade_signal=None)
-                        trader.leaverunner(open_position)
+                        leaverunner(trader, open_position)
 
                     elif current_price <= stoploss_price:
-                        print('max_price exceeds StopLoss price, closing position')
-                        trader.buy_order(open_position, trade_signal="CLOSE")
+                        print('current_price exceeds StopLoss price, closing position')
+                        trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
                         if not RUN_LIVE_TRADER:
                             trader.buy_order(open_position, trade_signal=None)
 
@@ -174,7 +174,7 @@ def streamPrice(trader):
 
                     elif current_price < trailstop_price:
                         print('current_price is lower than trailstop price, closing position')
-                        trader.buy_order(open_position, trade_signal="CLOSE")
+                        trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
                         if not RUN_LIVE_TRADER:
                             trader.buy_order(open_position, trade_signal=None)
 
@@ -195,11 +195,11 @@ def streamPrice(trader):
                         trader.buy_order(open_position, trade_signal="CLOSE")
                         if not RUN_LIVE_TRADER:
                             trader.buy_order(open_position, trade_signal=None)
-                        trader.leaverunner(open_position)
+                        leaverunner(trader, open_position)
 
                     elif current_price <= stoploss_price:
-                        print('max_price exceeds StopLoss price, closing position')
-                        trader.buy_order(open_position, trade_signal="CLOSE")
+                        print('current_price exceeds StopLoss price, closing position')
+                        trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
                         if not RUN_LIVE_TRADER:
                             trader.buy_order(open_position, trade_signal=None)
 

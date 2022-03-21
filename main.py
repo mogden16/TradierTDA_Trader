@@ -448,6 +448,26 @@ class Main:
             if main.error > 0:
                 print('errors', main.error)
 
+
+            """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF 
+            QUEUED ORDERS ON TRADIER & MONGO """
+            tradier_queued = len(self.tradier.get_queuedPositions())
+            mongo_queued = len(self.mongo.queue.find({}))
+            if tradier_queued == mongo_queued:
+                pass
+            else:
+                print(f'something went wrong, tradier queued={tradier_queued} and mongo queued={mongo_queued}')
+
+            """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF 
+            OPEN ORDERS ON TRADIER & MONGO """
+            tradier_open = len(self.tradier.get_openPositions())
+            mongo_open = len(self.mongo.open_positions.find({}))
+            if tradier_open == mongo_open:
+                pass
+            else:
+                print(f'something went wrong, tradier openOrders={tradier_open} and mongo openOrders={mongo_open}')
+
+
             time.sleep(helper_functions.selectSleep())
 
 

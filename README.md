@@ -2,7 +2,7 @@
 
 ## Description
 
-- This automated trading bot utilizes TDAmeritrades API, Thinkorswim Alert System, Gmail API , and MongoDB to place trades, both Equity and Options, dynamically. _**This bot works for LONG and SHORT positions**_
+- This automated trading bot utilitizes, TDameritrade API, TD Websocket API, Tradier API, Gmail API, Discord integration and MongoDB API.
 
 ## Table Of Contents
 
@@ -27,6 +27,13 @@
 
 ## <a name="how-it-works"></a> How it works (in a nutshell)
 
+There are many ways to run this bot:
+- You can run it using Trey Thomas's way of using TD API to scan alerts (gmail alerts)
+- You can run it scanning discord notifications
+- You can filter these alerts (discord & gmail) to run a technical analysis before you trade it
+- right now this is just configured using Hull Moving Average & QQE (trending up/down while not being overbought/oversold)
+- The open positions will then be continuously scanned and updating in pricing. Depending on the strategy, it will sell out of the position.
+
 ### **Thinkorswim**
 
 1. Develop strategies in Thinkorswim.
@@ -34,10 +41,15 @@
 3. Set your scanner to send alerts to your non-personal gmail.
 4. When a symbol is populated into the scanner, an alert is triggered and sent to gmail.
 
+### **Discord**
+
+1. I personally use https://www.teklutrades.com/FlowAnalysis, I think he's very knowledgeable and a great programmer.
+2. It's $40/month but the alerts are formatted well.
+
 ### **Trading Bot (Python)**
 
-1. Continuously scrapes email inbox looking for alerts.
-2. Once found, bot will extract needed information and will place a trade if warranted.
+1. Continuously scrapes email inbox/discord looking for alerts.
+2. Once found, bot will extract needed information and will run TA (if you have RUN_TA set to True in your config.py).
 
 ---
 

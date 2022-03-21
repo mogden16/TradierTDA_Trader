@@ -1,10 +1,8 @@
 # imports
-from datetime import datetime, timedelta
-import urllib.parse as up
 import requests
 import traceback
-
 import config
+import polygon
 from pymongo.errors import WriteError, WriteConcernError
 from tradier import tradier_constants
 from assets.helper_functions import modifiedAccountID, getDatetime
@@ -56,6 +54,14 @@ class TradierTrader(tradierOrderBuilder, Tasks):
     @exception_handler
     def get_quote(self, polygon_symbol):
 
+        if type(polygon_symbol) == dict:
+            trade_data = polygon_symbol
+            formatted_exp_date = trade_data['Exp_Date'][2:].replace("-", "")
+
+            polygon_symbol = polygon.build_option_symbol(trade_data['Symbol'], formatted_exp_date,
+                                                         trade_data['Option_Type'], trade_data['Strike_Price'],
+                                                         prefix_o=False)
+
         api_path = tradier_constants.API_PATH['quotes']
         path = f'{self.endpoint}{api_path}'
 
@@ -84,6 +90,47 @@ class TradierTrader(tradierOrderBuilder, Tasks):
         json_response = response.json()
 
         return json_response
+
+    @exception_handler
+    def get_openPositions(self):
+
+        api_path = tradier_constants.API_PATH['account_positions']
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id))}'
+
+        response = requests.get(path,
+                                params={},
+                                headers=self.headers
+                                )
+        json_response = response.json()
+
+        return json_response
+
+    @exception_handler
+    def get_allPositions(self):
+        """ THIS GETS ALL QUEUED ORDERS FOR THE DAY'S SESSION """
+
+        api_path = tradier_constants.API_PATH['account_orders']
+        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.account_id))}'
+
+        response = requests.get(path,
+                                params={'includeTags': 'false'},
+                                headers=self.headers
+                                )
+        json_response = response.json()
+
+        return json_response
+
+    @exception_handler
+    def get_queuedPositions(self):
+
+        queued_positions = []
+        todays_positions = self.get_allPositions()['orders']['order']
+
+        for position in todays_positions:
+            if position['status'] == 'pending':
+                queued_positions.append(position['id'])
+
+        return queued_positions
 
     @exception_handler
     def place_order(self, order):
