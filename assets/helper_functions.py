@@ -85,6 +85,10 @@ def formatGmailAlerts(trade_data):
         exp_day = '%02d' % datetime_object.day
         option_type = data['Option_Type']
         strategy = data['Strategy']
+        side = data['Side']
+
+        if side == "SELL_TO_CLOSE":
+            continue
 
         if option_type == "CALL":
             strike_price = pre_symbol.split('C')
