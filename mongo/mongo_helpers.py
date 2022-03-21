@@ -1,10 +1,9 @@
 from pymongo import MongoClient
 import certifi
-import logging
 
 ca = certifi.where()
 
-# MONGO_URI = config.MONGO_URI
+MONGO_URI = config.MONGO_URI
 
 class MongoFunctions:
     def __init__(self):
