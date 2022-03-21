@@ -1,0 +1,81 @@
+
+####################### THE FILENAME WILL NEED TO BE CHANGED FROM config.py.example TO config.env TO ALLOW THE BOT TO USE THE ENVIRONMENTAL VARIABLES ###############################
+# RUN LIVE TRADER. IF SET TO TRUE, LIVE TRADER WILL RUN AND PAPER TRADER WILL NOT RUN. IF SET TO FALSE, ONLY PAPER TRADER WILL RUN #
+RUN_LIVE_TRADER = False
+RUN_TRADIER = True   # IF SET TO FALSE, IT WILL RUN TD API
+
+
+IS_TESTING = False    # SET TO TRUE IF OUTSIDE MARKET HOURS
+TRADE_HEDGES = False
+
+# MONGO #
+MONGO_URI = 'mongodb+srv://XXXXXXX:XXXXXXXXXX@cluster1.XXXXXX.mongodb.net/Api_Trader?retryWrites=true&w=majority'
+
+# CONNECT TO GMAIL #
+RUN_GMAIL = True
+RUN_DISCORD = True
+
+# PUSHSAFER #
+#PUSH_API_KEY = *enter pushsafer api key here*
+
+# PYTZ TIMEZONE #
+TIMEZONE = 'US/Eastern'
+
+# TASKS #
+RUN_TASKS = True
+RUN_WEBSOCKET = True
+
+##########################   TRADING CRITERIA   #################
+MIN_OPTIONPRICE = .5
+MAX_OPTIONPRICE = 3
+MIN_VOLUME = 1000
+MIN_DELTA = .3
+
+# ORDERS #
+BUY_PRICE = 'bidPrice'  # bidPrice, askPrice, lastPrice
+SELL_PRICE = 'askPrice'  # bidPrice, askPrice, lastPrice
+
+# OCO #
+TAKE_PROFIT_PERCENTAGE = .1
+STOP_LOSS_PERCENTAGE = .2
+
+# TRAIL #
+TRAIL_STOP_PERCENTAGE = .5
+
+RUNNER_FACTOR = .5    # ONLY MATTERS IF YOU'RE DOING A RUNNER STRATEGY
+
+###################     TECHNICAL ANALYSIS   ####################
+RUN_TA = False
+RUN_30M_TA = False
+
+############################     TD STREAMING   #################
+API_KEY = 'XXXXXXXXXXXXXXXXXXXXXXXXX@AMER.OAUTHAP'
+REDIRECT_URI = 'https://localhost'
+ACCOUNT_ID = 1234567890
+HEARTBEAT_SETTING = 10
+STREAMPRICE_LINK = 'askPrice'     # Do you want to track the askPrice, bidPrice, lastPrice
+
+#TOKEN_PATH = '/Users/mattogden/thinkorswim/TradingBOT/tradierAPI/tdameritrade/token'
+TOKEN_PATH = 'Z:/thinkorswim/TradingBOT/tradierAPI/tdameritrade/token'
+
+
+##############################     DISCORD   ####################
+CHANNELID = '123456789123456789'
+DISCORD_AUTH = 'mfa.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+DISCORD_USER = 'Flow Bot'
+STRATEGY = 'DISCORD'
+
+# ALERTS #
+DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/XXXXXXXXXXXXXX/XXXXXXXXXXXXXX'
+
+
+########################   TRADIER   ############################
+# REAL TRADING #
+LIVE_ACCESS_TOKEN = 'XXXXXXXXXXXXXXXXXX'
+LIVE_ACCOUNT_NUMBER = '123ABC123'
+
+# PAPER TRADING #
+SANDBOX_ACCESS_TOKEN = 'ZZZZZZZZZZZZZZZZ'
+SANDBOX_ACCOUNT_NUMBER = '456DEF456'
+
+
