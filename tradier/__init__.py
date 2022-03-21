@@ -1,352 +1,581 @@
 # imports
 from datetime import datetime, timedelta
 import urllib.parse as up
-import time
 import requests
-from assets.helper_functions import modifiedAccountID
+import traceback
+
+import config
+from pymongo.errors import WriteError, WriteConcernError
+from tradier import tradier_constants
+from assets.helper_functions import modifiedAccountID, getDatetime
 from assets.exception_handler import exception_handler
+from tradier.tradierOrderBuilder import tradierOrderBuilder
+from api_trader.tasks import Tasks
+from discord import discord_helpers
 
+RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
+RUN_WEBSOCKET = config.RUN_WEBSOCKET
+TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 
-class Tradier:
+class TradierTrader(tradierOrderBuilder, Tasks):
 
-    def __init__(self, mongo, user, account_id, logger, push_notification):
+    def __init__(self, user, mongo, logger):
+        self.endpoint = tradier_constants.API_ENDPOINT['brokerage'] if RUN_LIVE_TRADER \
+            else tradier_constants.API_ENDPOINT['brokerage_sandbox']
 
         self.user = user
 
-        self.account_id = account_id
+        self.mongo = mongo
 
         self.logger = logger
 
-        self.users = mongo.users
+        self.account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
 
-        self.push_notification = push_notification
+        self.tradier_token = config.LIVE_ACCESS_TOKEN if RUN_LIVE_TRADER else config.SANDBOX_ACCESS_TOKEN
 
-        self.no_go_token_sent = False
+        self.headers = {'Authorization': f'Bearer {self.tradier_token}',
+                        'Accept': 'application/json'
+                        }
 
-        self.client_id = self.user["ClientID"]
+        tradierOrderBuilder.__init__(self)
 
-        self.header = {}
+        Tasks.__init__(self)
 
-        self.terminate = False
+    def get_accountbalance(self):
+        api_path = tradier_constants.API_PATH['account_balances']
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id))}'
 
-        self.invalid_count = 0
+        response = requests.get(path,
+                                params={},
+                                headers=self.headers
+                                )
+        json_response = response.json()
+        # print(response.status_code)
+        print(json_response)
 
     @exception_handler
-    def initialConnect(self):
+    def get_quote(self, polygon_symbol):
 
-        self.logger.info(
-            f"CONNECTING {self.user['Name']} TO TRADIER API ({modifiedAccountID(self.account_id)})", extra={'log': False})
+        api_path = tradier_constants.API_PATH['quotes']
+        path = f'{self.endpoint}{api_path}'
 
-        isValid = self.checkTokenValidity()
+        response = requests.get(path,
+                                params={'symbols': f'{polygon_symbol}'},
+                                headers=self.headers
+                                )
+        json_response = response.json()
+        obj = {
+            'bidPrice': json_response['quotes']['quote']['bid'],
+            'askPrice': json_response['quotes']['quote']['ask'],
+            'lastPrice': json_response['quotes']['quote']['last']
+        }
+        return obj
 
-        if isValid:
+    @exception_handler
+    def get_order(self, id):
+
+        api_path = tradier_constants.API_PATH['account_order_status']
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(id))}'
+
+        response = requests.get(path,
+                                params={'includeTags': 'false'},
+                                headers=self.headers
+                                )
+        json_response = response.json()
+
+        return json_response
+
+    @exception_handler
+    def place_order(self, order):
+
+        api_path = tradier_constants.API_PATH['orders']
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id))}'
+
+        response = requests.post(path,
+                                data=order,
+                                headers=self.headers
+                                )
+
+        json_response = response.json()
+        status_code = response.status_code
+        return json_response, status_code
+
+    # STEP ONE
+    @exception_handler
+    def sendOrder(self, trade_data, strategy_object, direction):
+
+        symbol = trade_data["Symbol"]
+
+        strategy = trade_data["Strategy"]
+
+        side = trade_data["Side"]
+
+        order_type = strategy_object["Order_Type"]
+
+        pre_symbol = trade_data["Pre_Symbol"]
+
+        strike_price = trade_data["Strike_Price"]
+
+        isRunner = trade_data["isRunner"]
+
+        # volume = trade_data["Volume"]
+
+        # oi = trade_data["Open_Interest"]
+
+        if RUN_LIVE_TRADER:
+
+            if RUN_WEBSOCKET:
+
+                order, obj = self.standardOrder(
+                    trade_data, strategy_object, direction)
+
+            else:
+                print('ERROR in init.py tradier')
+
+            # elif not RUN_WEBSOCKET:
+            #
+            #     if order_type == "OCO":
+            #
+            #         order, obj = self.OCOorder(
+            #             trade_data, strategy_object, direction)
+            #
+            #     elif order_type == "TRAIL":
+            #
+            #         order, obj = self.TRAILorder(
+            #             trade_data, strategy_object, direction)
+            #
+            #     else:
+            #
+            #         order, obj = self.standardOrder(
+            #             trade_data, strategy_object, direction)
+
+        else:
+
+            order, obj = self.standardOrder(
+                trade_data, strategy_object, direction)
+
+        if order == None and obj == None:
+
+            return
+
+        # PLACE ORDER ################################################
+
+        resp, status_code = self.place_order(order)
+
+        resp = resp['order']
+
+        if status_code not in [200, 201]:
+
+            other = {
+                "Symbol": symbol,
+                "Order_Type": side,
+                "Order_Status": "REJECTED",
+                "Strategy": strategy,
+                "Trader": self.user["Name"],
+                "Date": getDatetime(),
+                "Account_ID": self.account_id
+            }
 
             self.logger.info(
-                f"CONNECTED {self.user['Name']} TO TRADIER API ({modifiedAccountID(self.account_id)})", extra={'log': False})
+                f"{symbol} Rejected For {self.user['Name']} ({modifiedAccountID(self.account_id)}) - Reason: {(resp.json())['error']} ")
 
-            return True
+            self.mongo.rejected.insert_one(other)
+
+            return
+
+        # GETS ORDER ID FROM RESPONSE HEADERS LOCATION
+        obj["Order_ID"] = resp["id"]
+        
+        if RUN_LIVE_TRADER:
+            
+            obj["Account_Position"] = "Live"
+            
+        else:
+            
+            obj["Account_Position"] = "Paper"
+
+        obj["Order_Status"] = "QUEUED"
+
+        obj['Strike_Price'] = trade_data['Strike_Price']
+
+        obj['isRunner'] = trade_data['isRunner']
+
+        self.mongo.queue.insert_one(obj)
+
+        response_msg = f"{'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}: {side} Order for Symbol {symbol} ({modifiedAccountID(self.account_id)})"
+
+        self.logger.info(response_msg)
+
+        discord_queue_message_to_push = f":eyes: TradingBOT just Queued \n Side: {side} \n Symbol: {pre_symbol} \n :eyes: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
+        discord_helpers.send_discord_alert(discord_queue_message_to_push)
+
+        self.updateStatus()
+
+    # STEP TWO
+    @exception_handler
+    def queueOrder(self, order):
+        """ METHOD FOR QUEUEING ORDER TO QUEUE COLLECTION IN MONGODB
+
+        Args:
+            order ([dict]): [ORDER DATA TO BE PLACED IN QUEUE COLLECTION]
+        """
+        # ADD TO QUEUE WITHOUT ORDER ID AND STATUS
+        self.mongo.queue.update_one(
+            {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]}, {"$set": order}, upsert=True)
+
+    # STEP THREE
+    @exception_handler
+    def updateStatus(self):
+        """ METHOD QUERIES THE QUEUED ORDERS AND USES THE ORDER ID TO QUERY TDAMERITRADES ORDERS FOR ACCOUNT TO CHECK THE ORDERS CURRENT STATUS.
+            INITIALLY WHEN ORDER IS PLACED, THE ORDER STATUS ON TDAMERITRADES END IS SET TO WORKING OR QUEUED. THREE OUTCOMES THAT I AM LOOKING FOR ARE
+            FILLED, CANCELED, REJECTED.
+
+            IF FILLED, THEN QUEUED ORDER IS REMOVED FROM QUEUE AND THE pushOrder METHOD IS CALLED.
+
+            IF REJECTED OR CANCELED, THEN QUEUED ORDER IS REMOVED FROM QUEUE AND SENT TO OTHER COLLECTION IN MONGODB.
+
+            IF ORDER ID NOT FOUND, THEN ASSUME ORDER FILLED AND MARK AS ASSUMED DATA. ELSE MARK AS RELIABLE DATA.
+        """
+
+        queued_orders = self.mongo.queue.find({"Trader": self.user["Name"], "Order_ID": {
+                                        "$ne": None}, "Account_ID": self.account_id})
+
+        for queue_order in queued_orders:
+
+            spec_order = self.get_order(queue_order['Order_ID'])['order']
+
+            new_status = spec_order["status"]
+
+            order_type = queue_order["Order_Type"]
+
+            # CHECK IF QUEUE ORDER ID EQUALS TDA ORDER ID
+            if queue_order["Order_ID"] == spec_order["id"]:
+
+                if new_status == "filled":
+
+                    self.pushOrder(queue_order, spec_order)
+
+                elif new_status == "cancelled" or new_status == "rejected":
+
+                    # REMOVE FROM QUEUE
+                    self.mongo.queue.delete_one({"Trader": self.user["Name"], "Symbol": queue_order["Symbol"],
+                                           "Strategy": queue_order["Strategy"], "Account_ID": self.account_id})
+
+                    other = {
+                        "Symbol": queue_order["Symbol"],
+                        "Order_Type": order_type,
+                        "Order_Status": new_status,
+                        "Strategy": queue_order["Strategy"],
+                        "Trader": self.user["Name"],
+                        "Date": getDatetime(),
+                        "Account_ID": self.account_id
+                    }
+
+                    self.mongo.rejected.insert_one(
+                        other) if new_status == "REJECTED" else self.canceled.insert_one(other)
+
+                    self.logger.info(
+                        f"{new_status.upper()} Order For {queue_order['Symbol']} ({modifiedAccountID(self.account_id)})")
+
+                else:
+
+                    self.mongo.queue.update_one({"Trader": self.user["Name"], "Symbol": queue_order["Symbol"], "Strategy": queue_order["Strategy"]}, {
+                        "$set": {"Order_Status": new_status}})
+
+    # STEP FOUR
+    @exception_handler
+    def pushOrder(self, queue_order, spec_order, data_integrity="Reliable"):
+        """ METHOD PUSHES ORDER TO EITHER OPEN POSITIONS OR CLOSED POSITIONS COLLECTION IN MONGODB.
+            IF BUY ORDER, THEN PUSHES TO OPEN POSITIONS.
+            IF SELL ORDER, THEN PUSHES TO CLOSED POSITIONS.
+
+        Args:
+            queue_order ([dict]): [QUEUE ORDER DATA FROM QUEUE]
+            spec_order ([dict(json)]): [ORDER DATA FROM TDAMERITRADE]
+        """
+
+        symbol = queue_order["Symbol"]
+
+        if "orderActivityCollection" in spec_order:
+
+            price = spec_order["orderActivityCollection"][0]["executionLegs"][0]["price"]
+
+            shares = int(spec_order["quantity"])
 
         else:
+
+            price = spec_order["price"]
+
+            shares = int(queue_order["Qty"])
+
+        strategy = queue_order["Strategy"]
+
+        side = queue_order["Side"]
+
+        account_id = queue_order["Account_ID"]
+
+        position_size = queue_order["Position_Size"]
+
+        asset_type = queue_order["Asset_Type"]
+
+        if asset_type == "OPTION":
+
+            price = round(price, 2)
+
+        else:
+            price = round(price, 2) if price >= 1 else round (price, 4)
+
+        position_type = queue_order["Position_Type"]
+
+        direction = queue_order["Direction"]
+
+        account_position = queue_order["Account_Position"]
+
+        order_type = queue_order["Order_Type"]
+
+        obj = {
+            "Symbol": symbol,
+            "Strategy": strategy,
+            "Position_Size": position_size,
+            "Position_Type": position_type,
+            "Data_Integrity": data_integrity,
+            "Trader": self.user["Name"],
+            "Account_ID": account_id,
+            "Asset_Type": asset_type,
+            "Account_Position": account_position,
+            "Order_Type": order_type
+        }
+
+        if asset_type == "OPTION":
+
+            obj["Pre_Symbol"] = queue_order["Pre_Symbol"]
+
+            pre_symbol = queue_order["Pre_Symbol"]
+
+            obj["Exp_Date"] = queue_order["Exp_Date"]
+
+            obj["Option_Type"] = queue_order["Option_Type"]
+
+            obj["Strike_Price"] = queue_order["Strike_Price"]
+
+            obj['isRunner'] = queue_order["isRunner"]
+
+            obj['Bid_Price'] = price
+
+            obj['Ask_Price'] = price
+
+            obj['Last_Price'] = price
+
+
+        collection_insert = None
+
+        message_to_push = None
+
+        # url = f"https://api.tdameritrade.com/v1/marketdata/quotes?symbol={symbol}"
+        # resp = self.tdameritrade.sendRequest(url)
+        # underlying = resp[str(symbol)]['lastPrice']
+
+        if direction == "OPEN POSITION":
+
+            obj["Qty"] = shares
+
+            obj["Entry_Price"] = price
+
+            obj["Entry_Date"] = getDatetime()
+
+            obj["Max_Price"] = price
+
+            obj["Trail_Stop_Value"] = price * TRAILSTOP_PERCENTAGE
+
+            collection_insert = self.mongo.open_positions.insert_one
+
+            discord_message_to_push = f":rocket: TradingBOT just opened \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {shares} \n Price: ${price} \n Strategy: {strategy} \n Asset Type: {asset_type} \n Date: {getDatetime()} \n :rocket: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
+
+
+        elif direction == "CLOSE POSITION":
+
+            position = self.mongo.open_positions.find_one(
+                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy})
+
+            obj["Qty"] = position["Qty"]
+
+            obj["Entry_Price"] = position["Entry_Price"]
+
+            obj["Entry_Date"] = position["Entry_Date"]
+
+            obj["Exit_Price"] = price
+
+            obj["Exit_Date"] = getDatetime()
+
+            exit_price = round(price * position["Qty"], 2)
+
+            entry_price = round(position["Entry_Price"] * position["Qty"], 2)
+
+            collection_insert = self.mongo.closed_positions.insert_one
+
+            discord_message_to_push = f":closed_book: TradingBOT just closed \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {position['Qty']} \n Entry Price: ${position['Entry_Price']} \n Entry Date: {position['Entry_Date']} \n Exit Price: ${price} \n Exit Date: {getDatetime()} \n Strategy: {strategy} \n Asset Type: {asset_type} \n :closed_book: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
+
+            # REMOVE FROM OPEN POSITIONS
+            is_removed = self.mongo.open_positions.delete_one(
+                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy})
+
+            try:
+
+                if int(is_removed.deleted_count) == 0:
+
+                    self.logger.error(
+                        f"INITIAL FAIL OF DELETING OPEN POSITION FOR SYMBOL {symbol} - {self.user['Name']} ({modifiedAccountID(self.account_id)})")
+
+                    self.mongo.open_positions.delete_one(
+                        {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy})
+
+            except Exception:
+
+                msg = f"{self.user['Name']} - {modifiedAccountID(self.account_id)} - {traceback.format_exc()}"
+
+                self.logger.error(msg)
+
+        # PUSH OBJECT TO MONGO. IF WRITE ERROR THEN ONE RETRY WILL OCCUR. IF YOU SEE THIS ERROR, THEN YOU MUST CONFIRM THE PUSH OCCURED.
+        try:
+
+            collection_insert(obj)
+
+        except WriteConcernError as e:
 
             self.logger.error(
-                f"FAILED TO CONNECT {self.user['Name']} TO TRADIER API ({self.account_id})", extra={'log': False})
+                f"INITIAL FAIL OF INSERTING OPEN POSITION FOR SYMBOL {symbol} - DATE/TIME: {getDatetime()} - DATA: {obj} - {e}")
 
-            return False
+            collection_insert(obj)
 
+        except WriteError as e:
+
+            self.logger.error(
+                f"INITIAL FAIL OF INSERTING OPEN POSITION FOR SYMBOL {symbol} - DATE/TIME: {getDatetime()} - DATA: {obj} - {e}")
+
+            collection_insert(obj)
+
+        except Exception:
+
+            msg = f"{self.user['Name']} - {modifiedAccountID(self.account_id)} - {traceback.format_exc()}"
+
+            self.logger.error(msg)
+
+        self.logger.info(
+            f"Pushing {side} Order For {symbol} To {'Open Positions' if direction == 'OPEN POSITION' else 'Closed Positions'} ({modifiedAccountID(self.account_id)})")
+
+        # REMOVE FROM QUEUE
+        self.mongo.queue.delete_one({"Trader": self.user["Name"], "Symbol": symbol,
+                               "Strategy": strategy, "Account_ID": self.account_id})
+
+        discord_helpers.send_discord_alert(discord_message_to_push)
+
+    # RUN TRADER
     @exception_handler
-    def checkTokenValidity(self):
-        """ METHOD CHECKS IF ACCESS TOKEN IS VALID
+    def runTrader(self, trade_data):
+        """ METHOD RUNS ON A FOR LOOP ITERATING OVER THE TRADE DATA AND MAKING DECISIONS ON WHAT NEEDS TO BUY OR SELL.
 
-        Returns:
-            [boolean]: TRUE IF SUCCESSFUL, FALSE IF ERROR
+        Args:
+            trade_data ([list]): CONSISTS OF TWO DICTS TOP LEVEL, AND THEIR VALUES AS LISTS CONTAINING ALL THE TRADE DATA FOR EACH STOCK.
         """
 
-        # GET USER DATA
-        user = self.users.find_one({"Name": self.user["Name"]})
+        # UPDATE ALL ORDER STATUS'S
+        self.updateStatus()
 
-        # ADD EXISTING TOKEN TO HEADER
-        self.header.update({
-            "Authorization": f"Bearer {user['Accounts'][self.account_id]['access_token']}"})
+        # UPDATE USER ATTRIBUTE
+        self.user = self.mongo.users.find_one({"Name": self.user["Name"]})
 
-        # CHECK IF ACCESS TOKEN NEEDS UPDATED
-        age_sec = round(
-            time.time() - user["Accounts"][self.account_id]["created_at"])
+        row = trade_data
 
-        if age_sec >= user["Accounts"][self.account_id]['expires_in'] - 60:
+        strategy = row["Strategy"]
 
-            token = self.getNewTokens(user["Accounts"][self.account_id])
+        symbol = row["Symbol"]
 
-            if token:
+        asset_type = row["Asset_Type"]
 
-                # ADD NEW TOKEN DATA TO USER DATA IN DB
-                self.users.update_one({"Name": self.user["Name"]}, {
-                    "$set": {f"Accounts.{self.account_id}.expires_in": token['expires_in'], f"Accounts.{self.account_id}.access_token": token["access_token"], f"Accounts.{self.account_id}.created_at": time.time()}})
+        side = row["Side"]
 
-                self.header.update({
-                    "Authorization": f"Bearer {token['access_token']}"})
+        # CHECK OPEN POSITIONS AND QUEUE
+        open_position = self.mongo.open_positions.find_one(
+            {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
+
+        queued = self.mongo.queue.find_one(
+            {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
+
+        strategy_object = self.mongo.strategies.find_one(
+            {"Strategy": strategy})
+
+        if not strategy_object:
+
+            print('issue with strategy_object, see tradier --> __init__.py')
+
+            strategy_object = self.strategies.find_one(
+                {"Account_ID": self.account_id, "Strategy": strategy})
+
+        position_type = strategy_object["Position_Type"]
+
+        row["Position_Type"] = position_type
+
+        if not queued:
+
+            direction = None
+
+            # IS THERE AN OPEN POSITION ALREADY IN MONGO FOR THIS SYMBOL/STRATEGY COMBO
+            if open_position:
+
+                direction = "CLOSE POSITION"
+
+                # NEED TO COVER SHORT
+                if side == "BUY" and position_type == "SHORT":
+
+                    pass
+
+                # NEED TO SELL LONG
+                elif side == "SELL" and position_type == "LONG":
+
+                    pass
+
+                # NEED TO SELL LONG OPTION
+                elif side == "SELL_TO_CLOSE" and position_type == "LONG":
+
+                    pass
+
+                # NEED TO COVER SHORT OPTION
+                elif side == "BUY_TO_CLOSE" and position_type == "SHORT":
+
+                    pass
+
+                else:
+
+                    pass
 
             else:
 
-                return False
+                direction = "OPEN POSITION"
 
-        # CHECK IF REFRESH TOKEN NEEDS UPDATED
-        now = datetime.strptime(datetime.strftime(
-            datetime.now().replace(microsecond=0), "%Y-%m-%d"), "%Y-%m-%d")
+                # NEED TO GO LONG
+                if side == "BUY" and position_type == "LONG":
 
-        refresh_exp = datetime.strptime(
-            user["Accounts"][self.account_id]["refresh_exp_date"], "%Y-%m-%d")
+                    pass
 
-        days_left = (refresh_exp - now).total_seconds() / 60 / 60 / 24
+                # NEED TO GO SHORT
+                elif side == "SELL" and position_type == "SHORT":
 
-        if days_left <= 5:
+                    pass
 
-            token = self.getNewTokens(
-                user["Accounts"][self.account_id], refresh_type="Refresh Token")
+                # NEED TO GO SHORT OPTION
+                elif side == "SELL_TO_OPEN" and position_type == "SHORT":
 
-            if token:
+                    pass
 
-                # ADD NEW TOKEN DATA TO USER DATA IN DB
-                self.users.update_one({"Name": self.user["Name"]}, {
-                    "$set": {f"{self.account_id}.refresh_token": token['refresh_token'], f"{self.account_id}.refresh_exp_date": (datetime.now().replace(
-                        microsecond=0) + timedelta(days=90)).strftime("%Y-%m-%d")}})
+                # NEED TO GO LONG OPTION
+                elif side == "BUY_TO_OPEN" and position_type == "LONG":
 
-                self.header.update({
-                    "Authorization": f"Bearer {token['access_token']}"})
+                    pass
 
-            else:
+                else:
 
-                return False
+                    pass
 
-        return True
-
-    @exception_handler
-    def getNewTokens(self, token, refresh_type="Access Token"):
-        """ METHOD GETS NEW ACCESS TOKEN, OR NEW REFRESH TOKEN IF NEEDED.
-
-        Args:
-            token ([dict]): TOKEN DATA (ACCESS TOKEN, REFRESH TOKEN, EXP DATES)
-            refresh_type (str, optional): CAN BE EITHER Access Token OR Refresh Token. Defaults to "Access Token".
-
-        Raises:
-            Exception: IF RESPONSE STATUS CODE IS NOT 200
-
-        Returns:
-            [json]: NEW TOKEN DATA
-        """
-
-        data = {'grant_type': 'refresh_token',
-                'refresh_token': token["refresh_token"],
-                'client_id': self.client_id}
-
-        if refresh_type == "Refresh Token":
-
-            data["access_type"] = "offline"
-
-        # print(f"REFRESHING TOKEN: {data} - TRADER: {self.user['Name']} - REFRESH TYPE: {refresh_type} - ACCOUNT ID: {self.account_id}")
-
-        resp = requests.post('https://api.tdameritrade.com/v1/oauth2/token',
-                             headers={
-                                 'Content-Type': 'application/x-www-form-urlencoded'},
-                             data=data)
-
-        if resp.status_code != 200:
-
-            if not self.no_go_token_sent:
-
-                msg = f"ERROR WITH GETTING NEW TOKENS - {resp.json()} - TRADER: {self.user['Name']} - REFRESH TYPE: {refresh_type} - ACCOUNT ID: {modifiedAccountID(self.account_id)}"
-
-                self.logger.error(msg)
-
-                self.push_notification.send(msg)
-
-                self.no_go_token_sent = True
-
-            self.invalid_count += 1
-
-            if self.invalid_count == 5:
-
-                self.terminate = True
-
-                msg = f"{__class__.__name__} - {self.user['Name']} - TDAMERITRADE INSTANCE TERMINATED - {resp.json()} - Refresh Type: {refresh_type} {modifiedAccountID(self.account_id)}"
-
-                self.logger.error(msg)
-
-                self.push_notification.send(msg)
-
-            return
-
-        self.no_go_token_sent = False
-
-        self.invalid_count = 0
-
-        self.terminate = False
-
-        return resp.json()
-
-    @exception_handler
-    def sendRequest(self, url, method="GET", data=None):
-        """ METHOD SENDS ALL REQUESTS FOR METHODS BELOW.
-
-        Args:
-            url ([str]): URL for the particular API
-            method (str, optional): GET, POST, PUT, DELETE. Defaults to "GET".
-            data ([dict], optional): ONLY IF POST REQUEST. Defaults to None.
-
-        Returns:
-            [json]: RESPONSE DATA
-        """
-
-        isValid = self.checkTokenValidity()
-
-        if isValid:
-
-            if method == "GET":
-
-                resp = requests.get(url, headers=self.header)
-
-                return resp.json()
-
-            elif method == "POST":
-
-                resp = requests.post(url, headers=self.header, json=data)
-
-                return resp
-
-            elif method == "PATCH":
-
-                resp = requests.patch(url, headers=self.header, json=data)
-
-                return resp
-
-            elif method == "PUT":
-
-                resp = requests.put(url, headers=self.header, json=data)
-
-                return resp
-
-            elif method == "DELETE":
-
-                resp = requests.delete(url, headers=self.header)
-
-                return resp
-
-        else:
-
-            return
-
-    def getAccount(self):
-        """ METHOD GET ACCOUNT DATA
-
-        Returns:
-            [json]: ACCOUNT DATA
-        """
-
-        fields = up.quote("positions,orders")
-
-        url = f"https://api.tdameritrade.com/v1/accounts/{self.account_id}?fields={fields}"
-
-        return self.sendRequest(url)
-
-    def placeTDAOrder(self, data):
-        """ METHOD PLACES ORDER
-
-        Args:
-            data ([dict]): ORDER DATA
-
-        Returns:
-            [json]: ORDER RESPONSE INFO. USED TO RETRIEVE ORDER ID.
-        """
-
-        url = f"https://api.tdameritrade.com/v1/accounts/{self.account_id}/orders"
-
-        return self.sendRequest(url, method="POST", data=data)
-
-    def getBuyingPower(self):
-        """ METHOD GETS BUYING POWER
-
-        Returns:
-            [json]: BUYING POWER
-        """
-
-        account = self.getAccount()
-
-        buying_power = account["securitiesAccount"]["initialBalances"]["cashAvailableForTrading"]
-
-        return float(buying_power)
-
-    def getQuote(self, symbol):
-        """ METHOD GETS MOST RECENT QUOTE FOR STOCK
-
-        Args:
-            symbol ([str]): STOCK SYMBOL
-
-        Returns:
-            [json]: STOCK QUOTE
-        """
-
-        url = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/quotes"
-
-        return self.sendRequest(url)
-
-    def getQuotes(self, symbols):
-        """ METHOD GETS STOCK QUOTES FOR MULTIPLE STOCK IN ONE CALL.
-
-        Args:
-            symbols ([list]): LIST OF SYMBOLS
-
-        Returns:
-            [json]: ALL SYMBOLS STOCK DATA
-        """
-
-        join_ = ",".join(symbols)
-
-        seperated_values = up.quote(join_)
-
-        url = f"https://api.tdameritrade.com/v1/marketdata/quotes?symbol={seperated_values}"
-
-        return self.sendRequest(url)
-
-    def getSpecificOrder(self, id):
-        """ METHOD GETS A SPECIFIC ORDER INFO
-
-        Args:
-            id ([int]): ORDER ID FOR ORDER
-
-        Returns:
-            [json]: ORDER DATA
-        """
-
-        url = f"https://api.tdameritrade.com/v1/accounts/{self.account_id}/orders/{id}"
-
-        return self.sendRequest(url)
-
-    def cancelOrder(self, id):
-        """ METHOD CANCELS ORDER
-
-        Args:
-            id ([int]): ORDER ID FOR ORDER
-
-        Returns:
-            [json]: RESPONSE. LOOKING FOR STATUS CODE 200,201
-        """
-
-        url = f"https://api.tdameritrade.com/v1/accounts/{self.account_id}/orders/{id}"
-
-        return self.sendRequest(url, method="DELETE")
-
-    def getOptionChain(self, symbol, option_type, strike_price, exp_date):
-        """ METHOD GETS AN OPTION CHAIN FOR A PARTICULAR OPTION
-
-        Args:
-            symbol ([str]): STOCK SYMBOL
-            option_type ([str]): CALL OR PUT
-            strike_price ([str]): STRIKE PRICE
-            exp_date ([str]): YYYY-MM-DD
-
-        Returns:
-            [json]: STOCK QUOTE
-        """
-
-        url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={symbol}&contractType={option_type}&includeQuotes=FALSE&strike={strike_price}&fromDate={exp_date}&toDate={exp_date}"
-
-        return self.sendRequest(url)
+            if direction != None:
+                self.sendOrder(row if not open_position else {
+                               **row, **open_position}, strategy_object, direction)

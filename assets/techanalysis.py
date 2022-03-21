@@ -4,7 +4,6 @@ import pandas as pd
 from pyti.hull_moving_average import hull_moving_average as hma
 import pandas_ta as ta
 import config
-import constants as c
 
 RUN_TA = config.RUN_TA
 RUN_30M_TA = config.RUN_30M_TA

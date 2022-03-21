@@ -1,7 +1,7 @@
 import discord.discord_helpers
 from assets.helper_functions import getDatetime, modifiedAccountID
 from api_trader.tasks import Tasks
-from websocket.stream import TDWebsocket
+from td_websocket.stream import TDWebsocket
 from threading import Thread
 from assets.exception_handler import exception_handler
 from api_trader.order_builder import OrderBuilder

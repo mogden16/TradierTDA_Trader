@@ -2,16 +2,17 @@
 import time
 import logging
 import os
+
 import config
 from datetime import datetime
 import pytz
 import constants as c
 
-
 from api_trader import ApiTrader
-from tdameritrade import TDAmeritrade, td_helpers
+from tdameritrade import TDAmeritrade
 from gmail import Gmail
 from mongo import MongoDB
+from tradier import TradierTrader, tradier_helpers
 
 from assets import pushsafer, helper_functions, techanalysis
 from assets.exception_handler import exception_handler
@@ -19,6 +20,7 @@ from assets.timeformatter import Formatter
 from assets.multifilehandler import MultiFileHandler
 from discord import discord_helpers, discord_scanner
 
+RUN_TRADIER = config.RUN_TRADIER
 RUN_DISCORD = config.RUN_DISCORD
 RUN_GMAIL = config.RUN_GMAIL
 IS_TESTING = config.IS_TESTING
@@ -117,6 +119,8 @@ class Main:
                                 account_id), tdameritrade)
 
                             self.traders[account_id] = obj
+
+                            self.tradier = TradierTrader(user, self.mongo, self.logger)
 
                             time.sleep(0.1)
 
@@ -294,7 +298,7 @@ class Main:
 
 
     @exception_handler
-    def get_tradeFormat(self, live_trader, value, signal_type, isRunner):
+    def get_tradeFormat(self, live_trader, value, signal_type, trade_type, isRunner):
         trade_data = []
 
         if signal_type == None:
@@ -312,7 +316,8 @@ class Main:
                     "Strike_Price": value['Strike_Price'],
                     "Option_Type": value['Option_Type'],
                     "Strategy": value['Strategy'],
-                    "Asset_Type": "OPTION"
+                    "Asset_Type": "OPTION",
+                    "Trade_Type": trade_type
                 }
                 trade_data.append(obj)
 
@@ -342,6 +347,7 @@ class Main:
                 "Option_Type": value['Option_Type'],
                 "Strategy": value['Strategy'],
                 "Asset_Type": "OPTION",
+                "Trade_Type": trade_type,
                 "isRunner": isRunner
             }
 
@@ -357,48 +363,92 @@ class Main:
 
 
     @exception_handler
-    def buy_order(self,value,trade_signal, **kwargs):
+    def buy_order(self, value, trade_signal, trade_type="LIMIT", **kwargs):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
         """
         isRunner = kwargs.get('isRunner', False)
 
-        self.setupTraders()
+        if not RUN_TRADIER:
 
-        for api_trader in self.traders.values():
-            api_trader.updateStatus()
-            temp_trade_data=self.get_tradeFormat(api_trader,value,trade_signal, "TRUE" if isRunner else "FALSE")
-            for trade_data_row in temp_trade_data:
-                trade_data=[]
-                trade_data.append(trade_data_row)
-                api_trader.runTrader(trade_data)
+            self.setupTraders()
 
-                if not RUN_LIVE_TRADER:
-                    trade_data = []
+            for api_trader in self.traders.values():
+                api_trader.updateStatus()
+                temp_trade_data=self.get_tradeFormat(api_trader, value, trade_signal, trade_type, "TRUE" if isRunner else "FALSE")
+                for trade_data_row in temp_trade_data:
+                    trade_data=[]
+                    trade_data.append(trade_data_row)
                     api_trader.runTrader(trade_data)
 
-    @exception_handler
+                    if not RUN_LIVE_TRADER:
+                        trade_data = []
+                        api_trader.runTrader(trade_data)
+
+        else:
+
+            #UPDATE STATUS
+            for mongo_trader in self.traders.values():
+                temp_trade_data = self.get_tradeFormat(mongo_trader, value, trade_signal, trade_type, "TRUE" if isRunner else "FALSE")
+                for trade_data in temp_trade_data:
+                    self.tradier.runTrader(trade_data)
+
     def run(self):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
         """
 
         start_time = datetime.now(pytz.timezone(config.TIMEZONE))
 
-        self.setupTraders()
-
         connected = self.connectALL()
 
         while connected:
 
-            self.runScanners(start_time)
-            print(f'option_list {c.OPTIONLIST}')
-            for value in c.OPTIONLIST:
+            """THIS RUNS THE TD INSTANCE"""
+            self.setupTraders()
 
-                TA = techanalysis.technicalAnalysis(value)
-                hullvalue_up = TA['hullvalue_up']
-                hullvalue_dn = TA['hullvalue_dn']
-                qqe_value = TA['qqe_value']
-                qqe_overbought = TA['qqe_overbought']
-                qqe_oversold = TA['qqe_oversold']
+            """THIS WILL COMPILE THE ALERTS FROM DISCORD & GMAIL"""
+            trade_alerts = self.get_alerts(start_time)
+
+            """THIS WILL PUT ALL ALERTS INTO C.OPTIONLIST TO BE TRADED"""
+            self.set_alerts(trade_alerts)
+
+            if config.RUN_TA:
+
+                """ALL ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA"""
+                for api_trader in self.traders.values():
+
+                    for value in c.OPTIONLIST:
+
+                        signals = techanalysis.get_TA(value, api_trader)
+                        buy_signal = techanalysis.buy_criteria(signals)
+
+                        """IF BUY SIGNAL == TRUE THEN BUY!"""
+                        if buy_signal:
+                            self.buy_order(value, trade_signal="BUY", trade_type="LIMIT")
+                            c.DONTTRADELIST.append(value)
+
+
+            else:
+                buy_signal = True
+                for value in c.OPTIONLIST:
+                    self.buy_order(value, trade_signal="BUY", trade_type="LIMIT")
+                    c.DONTTRADELIST.append(value)
+
+            """  CLEAN UP OUR OLD ORDERS  """
+            for order in c.DONTTRADELIST:
+                if order in c.OPTIONLIST:
+                    c.OPTIONLIST.remove(order)
+
+            """  CHECK ON ALL ORDER STATUSES  """
+            for api_trader in main.traders.values():
+                api_trader.updateStatus()
+            self.tradier.updateStatus()
+
+            if RUN_WEBSOCKET:
+                tradier_helpers.streamPrice(self)
+
+
+            if main.error > 0:
+                print('errors', main.error)
 
             time.sleep(helper_functions.selectSleep())
 
@@ -410,61 +460,4 @@ if __name__ == "__main__":
 
     main = Main()
 
-    connected = main.connectALL()
-
-    start_time = datetime.now(pytz.timezone(config.TIMEZONE))
-
-    while connected:
-
-        """THIS RUNS THE TD INSTANCE"""
-        main.setupTraders()
-
-        """THIS WILL COMPILE THE ALERTS FROM DISCORD & GMAIL"""
-        trade_alerts = main.get_alerts(start_time)
-
-        """THIS WILL PUT ALL ALERTS INTO C.OPTIONLIST TO BE TRADED"""
-        main.set_alerts(trade_alerts)
-
-        if config.RUN_TA:
-
-            """ALL ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA"""
-            for api_trader in main.traders.values():
-
-                for value in c.OPTIONLIST:
-
-                    """IF BUY SIGNAL == TRUE THEN BUY!"""
-                    signals = techanalysis.get_TA(value, api_trader)
-                    buy_signal = techanalysis.buy_criteria(signals)
-
-                    if buy_signal:
-                        main.buy_order(value, trade_signal="BUY")
-                        c.DONTTRADELIST.append(value)
-
-        else:
-            buy_signal = True
-            for value in c.OPTIONLIST:
-                main.buy_order(value, trade_signal="BU")
-                c.DONTTRADELIST.append(value)
-
-
-        """  CLEAN UP OUR OLD ORDERS  """
-        for order in c.DONTTRADELIST:
-            if order in c.OPTIONLIST:
-                c.OPTIONLIST.remove(order)
-
-        """  CHECK ON ALL ORDER STATUSES  """
-        for api_trader in main.traders.values():
-            api_trader.updateStatus()
-
-
-
-        if main.error > 0:
-            print('errors', main.error)
-
-        time.sleep(helper_functions.selectSleep())
-
-
-    #
-    # while connected:
-    #
-    #     main.run()
+    main.run()
