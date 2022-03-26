@@ -38,7 +38,7 @@ def streamPrice(trader):
         symbol = open_position['Symbol']
         # strategy = open_position['Strategy']
         asset_type = open_position['Asset_Type']
-        entry_price = open_position['Entry_Price']
+        entry_price = open_position['Price']
         order_type = open_position['Order_Type']
         # option_type = open_position['Option_Type']
         # strike_price = open_position['Strike_Price']

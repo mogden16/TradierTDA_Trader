@@ -379,10 +379,8 @@ class Main:
                     trade_data=[]
                     trade_data.append(trade_data_row)
                     api_trader.runTrader(trade_data)
-
                     if not RUN_LIVE_TRADER:
-                        trade_data = []
-                        api_trader.runTrader(trade_data)
+                        api_trader.runTrader(trade_data=None)
 
         else:
 
@@ -451,22 +449,50 @@ class Main:
 
             """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF 
             QUEUED ORDERS ON TRADIER & MONGO """
-            tradier_queued = len(self.tradier.get_queuedPositions())
-            mongo_queued = len(self.mongo.queue.find({}))
-            if tradier_queued == mongo_queued:
+            tradier_queued_list = []
+            tradier_queued = self.tradier.get_queuedPositions()
+            if tradier_queued == None or tradier_queued['positions'] == 'null':
+                traider_queued = []
+            else:
+                tradier_queued = []
+                for queued in tradier_queued:
+                    tradier_queued_list.append(queued['id'])
+
+            mongo_queued_list = []
+            mongo_queued = list(self.mongo.queue.find({}))
+            for queued in mongo_queued:
+                mongo_queued_list.append(queued['Order_ID'])
+
+            tradier_queued_list.sort()
+            mongo_queued_list.sort()
+
+            if tradier_queued_list == mongo_queued_list:
                 pass
             else:
                 print(f'something went wrong, tradier queued={tradier_queued} and mongo queued={mongo_queued}')
 
             """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF 
             OPEN ORDERS ON TRADIER & MONGO """
-            tradier_open = len(self.tradier.get_openPositions())
-            mongo_open = len(self.mongo.open_positions.find({}))
-            if tradier_open == mongo_open:
+            tradier_open_list = []
+            tradier_open = self.tradier.get_openPositions()
+            if tradier_open == None or tradier_open['positions'] == 'null':
+                pass
+            else:
+                tradier_open = []
+                for openn in tradier_open:
+                    tradier_open_list.append(openn['id'])
+
+            mongo_open_list = []
+            mongo_open = list(self.mongo.open_positions.find({}))
+            for openn in mongo_open:
+                mongo_open_list.append(openn['Order_ID'])
+
+            tradier_open_list.sort()
+            mongo_open_list.sort()
+            if tradier_open_list == mongo_open_list:
                 pass
             else:
                 print(f'something went wrong, tradier openOrders={tradier_open} and mongo openOrders={mongo_open}')
-
 
             time.sleep(helper_functions.selectSleep())
 
@@ -479,3 +505,7 @@ if __name__ == "__main__":
     main = Main()
 
     main.run()
+    # main.connectALL()
+    # main.setupTraders()
+    # positions = main.tradier.get_openPositions()
+    # print(positions)

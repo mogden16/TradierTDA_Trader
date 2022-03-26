@@ -40,7 +40,7 @@ def discord_messages(start_time):
         for value in jsonn:
             hedge = False
             value['timestamp'] = try_parsing_date(value['timestamp'])
-            if value['timestamp'] >= start_time - timedelta(minutes=60):
+            if value['timestamp'] >= start_time - timedelta(minutes=3):
                 if value['author']['username'] == DISCORD_USER:
                     if len(value['embeds']) == 0:
                         continue

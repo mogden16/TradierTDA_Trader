@@ -107,7 +107,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
     @exception_handler
     def get_allPositions(self):
-        """ THIS GETS ALL QUEUED ORDERS FOR THE DAY'S SESSION """
+        """ THIS GETS ALL ORDERS FOR THE DAY'S SESSION """
 
         api_path = tradier_constants.API_PATH['account_orders']
         path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.account_id))}'
@@ -124,11 +124,16 @@ class TradierTrader(tradierOrderBuilder, Tasks):
     def get_queuedPositions(self):
 
         queued_positions = []
-        todays_positions = self.get_allPositions()['orders']['order']
+        todays_positions = self.get_allPositions()
+
+        if todays_positions['orders'] == 'null':
+            return
+        else:
+            todays_positions = todays_positions['orders']['order']
 
         for position in todays_positions:
-            if position['status'] == 'pending':
-                queued_positions.append(position['id'])
+            if position['status'] == 'pending' or position['status'] == 'open':
+                queued_positions.append(position)
 
         return queued_positions
 
@@ -249,7 +254,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
         self.queueOrder(obj)
 
-        response_msg = f"{'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}: {side} Order for Symbol {symbol} ({modifiedAccountID(self.account_id)})"
+        response_msg = f"{'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}: just Queued {side} Order for Symbol {symbol} ({modifiedAccountID(self.account_id)})"
 
         self.logger.info(response_msg)
 
@@ -264,9 +269,26 @@ class TradierTrader(tradierOrderBuilder, Tasks):
         Args:
             order ([dict]): [ORDER DATA TO BE PLACED IN QUEUE COLLECTION]
         """
+        # CHECK TRADIER TO MAKE SURE IT WAS ACTUALLY QUEUED
+
         # ADD TO QUEUE WITHOUT ORDER ID AND STATUS
-        self.mongo.queue.update_one(
-            {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]}, {"$set": order}, upsert=True)
+        position = self.get_order(order['Order_ID'])
+
+        if position == None:
+
+            print("TradingBOT 'placed' order but no order found in Tradier")
+            return
+
+        else:
+            current_status = position['order']['status']
+
+            if current_status == 'pending' or current_status == 'ok' or current_status == 'open':
+
+                self.mongo.queue.update_one(
+                    {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]},
+                    {"$set": order}, upsert=True)
+
+                self.updateStatus()
 
     # STEP THREE
     @exception_handler
@@ -282,6 +304,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
             IF ORDER ID NOT FOUND, THEN ASSUME ORDER FILLED AND MARK AS ASSUMED DATA. ELSE MARK AS RELIABLE DATA.
         """
 
+        # SCAN ALL QUEUED ORDERS
         queued_orders = self.mongo.queue.find({"Trader": self.user["Name"], "Order_ID": {
                                         "$ne": None}, "Account_ID": self.account_id})
 
@@ -298,9 +321,13 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
                 if new_status == "filled":
 
+                    # self.pushOrder(queue_order, spec_order)
                     self.pushOrder(queue_order, spec_order)
 
-                elif new_status == "cancelled" or new_status == "rejected":
+                    self.mongo.queue.delete_one({"Trader": self.user["Name"], "Symbol": queue_order["Symbol"],
+                                                 "Strategy": queue_order["Strategy"], "Account_ID": self.account_id})
+
+                elif new_status == "canceled" or new_status == "rejected":
 
                     # REMOVE FROM QUEUE
                     self.mongo.queue.delete_one({"Trader": self.user["Name"], "Symbol": queue_order["Symbol"],
@@ -317,7 +344,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
                     }
 
                     self.mongo.rejected.insert_one(
-                        other) if new_status == "REJECTED" else self.canceled.insert_one(other)
+                        other) if new_status == "REJECTED" else self.mongo.canceled.insert_one(other)
 
                     self.logger.info(
                         f"{new_status.upper()} Order For {queue_order['Symbol']} ({modifiedAccountID(self.account_id)})")
