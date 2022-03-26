@@ -324,9 +324,6 @@ class TradierTrader(tradierOrderBuilder, Tasks):
                     # self.pushOrder(queue_order, spec_order)
                     self.pushOrder(queue_order, spec_order)
 
-                    self.mongo.queue.delete_one({"Trader": self.user["Name"], "Symbol": queue_order["Symbol"],
-                                                 "Strategy": queue_order["Strategy"], "Account_ID": self.account_id})
-
                 elif new_status == "canceled" or new_status == "rejected":
 
                     # REMOVE FROM QUEUE

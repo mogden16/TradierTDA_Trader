@@ -436,9 +436,11 @@ class Main:
                     c.OPTIONLIST.remove(order)
 
             """  CHECK ON ALL ORDER STATUSES  """
-            for api_trader in main.traders.values():
-                api_trader.updateStatus()
-            self.tradier.updateStatus()
+            if RUN_TRADIER:
+                self.tradier.updateStatus
+            else:
+                for api_trader in main.traders.values():
+                    api_trader.updateStatus()
 
             if RUN_WEBSOCKET:
                 tradier_helpers.streamPrice(self)
