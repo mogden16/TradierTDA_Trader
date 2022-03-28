@@ -437,7 +437,7 @@ class Main:
 
             """  CHECK ON ALL ORDER STATUSES  """
             if RUN_TRADIER:
-                self.tradier.updateStatus
+                self.tradier.updateStatus()
             else:
                 for api_trader in main.traders.values():
                     api_trader.updateStatus()
@@ -453,10 +453,9 @@ class Main:
             QUEUED ORDERS ON TRADIER & MONGO """
             tradier_queued_list = []
             tradier_queued = self.tradier.get_queuedPositions()
-            if tradier_queued == None or tradier_queued['positions'] == 'null':
+            if len(tradier_queued) == 0 or tradier_queued == 'null':
                 traider_queued = []
             else:
-                tradier_queued = []
                 for queued in tradier_queued:
                     tradier_queued_list.append(queued['id'])
 
@@ -477,10 +476,12 @@ class Main:
             OPEN ORDERS ON TRADIER & MONGO """
             tradier_open_list = []
             tradier_open = self.tradier.get_openPositions()
-            if tradier_open == None or tradier_open['positions'] == 'null':
+            if len(tradier_open) == 0 or tradier_open['positions'] == 'null':
                 pass
+            elif len(tradier_open) == 1:
+                tradier_open_list.append(tradier_open['positions']['position']['id'])
             else:
-                tradier_open = []
+                tradier_open = tradier_open['positions']['position']
                 for openn in tradier_open:
                     tradier_open_list.append(openn['id'])
 

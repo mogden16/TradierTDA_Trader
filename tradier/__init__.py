@@ -71,9 +71,9 @@ class TradierTrader(tradierOrderBuilder, Tasks):
                                 )
         json_response = response.json()
         obj = {
-            'bidPrice': json_response['quotes']['quote']['bid'],
-            'askPrice': json_response['quotes']['quote']['ask'],
-            'lastPrice': json_response['quotes']['quote']['last']
+            'bidPrice': float(json_response['quotes']['quote']['bid']),
+            'askPrice': float(json_response['quotes']['quote']['ask']),
+            'lastPrice': float(json_response['quotes']['quote']['last'])
         }
         return obj
 
@@ -282,7 +282,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
         else:
             current_status = position['order']['status']
 
-            if current_status == 'pending' or current_status == 'ok' or current_status == 'open':
+            if current_status == 'pending' or current_status == 'open' or current_status == 'filled':
 
                 self.mongo.queue.update_one(
                     {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]},
@@ -448,11 +448,13 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
             obj["Qty"] = shares
 
-            obj["Entry_Price"] = price
+            obj["Price"] = price
 
             obj["Entry_Date"] = getDatetime()
 
             obj["Max_Price"] = price
+
+            obj['Order_ID'] = queue_order['Order_ID']
 
             obj["Trail_Stop_Value"] = price * TRAILSTOP_PERCENTAGE
 
@@ -468,7 +470,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
             obj["Qty"] = position["Qty"]
 
-            obj["Entry_Price"] = position["Entry_Price"]
+            obj["Price"] = position["Price"]
 
             obj["Entry_Date"] = position["Entry_Date"]
 
@@ -478,11 +480,11 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
             exit_price = round(price * position["Qty"], 2)
 
-            entry_price = round(position["Entry_Price"] * position["Qty"], 2)
+            entry_price = round(position["Price"] * position["Qty"], 2)
 
             collection_insert = self.mongo.closed_positions.insert_one
 
-            discord_message_to_push = f":closed_book: TradingBOT just closed \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {position['Qty']} \n Entry Price: ${position['Entry_Price']} \n Entry Date: {position['Entry_Date']} \n Exit Price: ${price} \n Exit Date: {getDatetime()} \n Strategy: {strategy} \n Asset Type: {asset_type} \n :closed_book: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
+            discord_message_to_push = f":closed_book: TradingBOT just closed \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {position['Qty']} \n Entry Price: ${position['Price']} \n Entry Date: {position['Entry_Date']} \n Exit Price: ${price} \n Exit Date: {getDatetime()} \n Strategy: {strategy} \n Asset Type: {asset_type} \n :closed_book: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
 
             # REMOVE FROM OPEN POSITIONS
             is_removed = self.mongo.open_positions.delete_one(
