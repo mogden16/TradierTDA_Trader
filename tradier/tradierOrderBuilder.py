@@ -53,9 +53,9 @@ class tradierOrderBuilder:
 
         trade_type = trade_data["Trade_Type"]
 
-        self.obj['Strategy'] = strategy
-
         asset_type = "OPTION" if "Pre_Symbol" in trade_data else "EQUITY"
+
+        # TRADIER
 
         self.order['duration'] = 'day'
 
@@ -63,17 +63,19 @@ class tradierOrderBuilder:
 
         self.order['symbol'] = symbol
 
-        self.obj['Symbol'] = symbol
-
         self.order['side'] = side.lower()
+
+        self.order['type'] = trade_type.lower()
+
+        self.obj['Strategy'] = strategy
+
+        self.obj['Symbol'] = symbol
 
         self.obj['Side'] = side
 
         self.obj['Account_ID'] = self.account_id
 
         self.obj['Asset_Type'] = asset_type
-
-        self.order['type'] = trade_type.lower()
 
         self.obj['Trade_Type'] = trade_type
 
@@ -123,13 +125,12 @@ class tradierOrderBuilder:
 
         position_size = int((strategy_object["Position_Size"]) * runnerFactor)
 
-        self.obj['Position_Size'] = position_size
-
         qty = int(position_size/price) if asset_type == "EQUITY" else int((position_size / 100)/price)
 
         if qty > 0:
 
             self.order['quantity'] = str(qty)
+
             self.obj['Qty'] = qty
 
         else:
@@ -137,6 +138,8 @@ class tradierOrderBuilder:
             self.logger.warning(f"{side} ORDER STOPPED: STRATEGY STATUS - {strategy_object['Active']} SHARES - {qty}")
 
             return None, None
+
+        self.obj['Position_Size'] = position_size
 
         self.obj['Trader'] = self.user['Name']
 
