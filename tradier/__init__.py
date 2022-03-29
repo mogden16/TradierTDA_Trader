@@ -8,6 +8,7 @@ from tradier import tradier_constants
 from assets.helper_functions import modifiedAccountID, getDatetime
 from assets.exception_handler import exception_handler
 from tradier.tradierOrderBuilder import tradierOrderBuilder
+from tradier.tradier_helpers import tradierExtractOCOChildren
 from api_trader.tasks import Tasks
 from discord import discord_helpers
 
@@ -154,7 +155,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
     # STEP ONE
     @exception_handler
-    def sendOrder(self, trade_data, strategy_object, direction):
+    def sendOrder(self, trade_data, strategy_object, direction, special_order_type):
 
         symbol = trade_data["Symbol"]
 
@@ -174,37 +175,43 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
         # oi = trade_data["Open_Interest"]
 
-        if RUN_LIVE_TRADER:
+        if order_type == "CUSTOM":
 
-            if RUN_WEBSOCKET:
+            if special_order_type == "STANDARD":
 
                 order, obj = self.standardOrder(
                     trade_data, strategy_object, direction)
 
-            else:
-                print('ERROR in init.py tradier')
+            elif special_order_type == "OCO":
 
-            # elif not RUN_WEBSOCKET:
-            #
-            #     if order_type == "OCO":
-            #
-            #         order, obj = self.OCOorder(
-            #             trade_data, strategy_object, direction)
-            #
-            #     elif order_type == "TRAIL":
-            #
-            #         order, obj = self.TRAILorder(
-            #             trade_data, strategy_object, direction)
-            #
-            #     else:
-            #
-            #         order, obj = self.standardOrder(
-            #             trade_data, strategy_object, direction)
+                order, obj = self.otoco_order(
+                    trade_data, strategy_object, direction)
+
+            elif special_order_type == "TRAIL":
+
+                pass
+
+            else:
+                print('your order_type in Mongo is incorrect')
 
         else:
 
-            order, obj = self.standardOrder(
-                trade_data, strategy_object, direction)
+            if order_type == "STANDARD":
+
+                order, obj = self.standardOrder(
+                    trade_data, strategy_object, direction)
+
+            elif order_type == "OCO":
+
+                order, obj = self.otoco_order(
+                    trade_data, strategy_object, direction)
+
+            elif order_type == "TRAIL":
+
+                pass
+
+            else:
+                print('your order_type in Mongo is incorrect')
 
         if order == None and obj == None:
 
@@ -321,10 +328,13 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
                 if new_status == "filled":
 
+                    if spec_order["class"] == "otoco":
+                        queue_order = {**queue_order, **tradierExtractOCOChildren(spec_order)}
+
                     # self.pushOrder(queue_order, spec_order)
                     self.pushOrder(queue_order, spec_order)
 
-                elif new_status == "canceled" or new_status == "rejected":
+                elif new_status == "canceled" or new_status == "rejected" or new_status == "expired":
 
                     # REMOVE FROM QUEUE
                     self.mongo.queue.delete_one({"Trader": self.user["Name"], "Symbol": queue_order["Symbol"],
@@ -340,8 +350,8 @@ class TradierTrader(tradierOrderBuilder, Tasks):
                         "Account_ID": self.account_id
                     }
 
-                    self.mongo.rejected.insert_one(
-                        other) if new_status == "REJECTED" else self.mongo.canceled.insert_one(other)
+                    self.mongo.canceled.insert_one(
+                        other) if new_status == "canceled" else self.mongo.rejected.insert_one(other)
 
                     self.logger.info(
                         f"{new_status.upper()} Order For {queue_order['Symbol']} ({modifiedAccountID(self.account_id)})")
@@ -365,9 +375,9 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
         symbol = queue_order["Symbol"]
 
-        if "orderActivityCollection" in spec_order:
+        if spec_order['class'] == 'otoco':
 
-            price = spec_order["orderActivityCollection"][0]["executionLegs"][0]["price"]
+            price = spec_order["leg"][0]["price"]
 
             shares = int(spec_order["quantity"])
 
@@ -440,10 +450,6 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
         message_to_push = None
 
-        # url = f"https://api.tdameritrade.com/v1/marketdata/quotes?symbol={symbol}"
-        # resp = self.tdameritrade.sendRequest(url)
-        # underlying = resp[str(symbol)]['lastPrice']
-
         if direction == "OPEN POSITION":
 
             obj["Qty"] = shares
@@ -461,7 +467,6 @@ class TradierTrader(tradierOrderBuilder, Tasks):
             collection_insert = self.mongo.open_positions.insert_one
 
             discord_message_to_push = f":rocket: TradingBOT just opened \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {shares} \n Price: ${price} \n Strategy: {strategy} \n Asset Type: {asset_type} \n Date: {getDatetime()} \n :rocket: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
-
 
         elif direction == "CLOSE POSITION":
 
@@ -542,7 +547,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
     # RUN TRADER
     @exception_handler
-    def runTrader(self, trade_data):
+    def runTrader(self, trade_data, special_order_type="STANDARD"):
         """ METHOD RUNS ON A FOR LOOP ITERATING OVER THE TRADE DATA AND MAKING DECISIONS ON WHAT NEEDS TO BUY OR SELL.
 
         Args:
@@ -649,4 +654,4 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
             if direction != None:
                 self.sendOrder(row if not open_position else {
-                               **row, **open_position}, strategy_object, direction)
+                               **row, **open_position}, strategy_object, direction, special_order_type)
