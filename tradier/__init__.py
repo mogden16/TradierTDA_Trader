@@ -9,14 +9,14 @@ from assets.helper_functions import modifiedAccountID, getDatetime
 from assets.exception_handler import exception_handler
 from tradier.tradierOrderBuilder import tradierOrderBuilder
 from tradier.tradier_helpers import tradierExtractOCOChildren
-from api_trader.tasks import Tasks
 from discord import discord_helpers
 
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 RUN_WEBSOCKET = config.RUN_WEBSOCKET
 TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
+IS_TESTING = config.IS_TESTING
 
-class TradierTrader(tradierOrderBuilder, Tasks):
+class TradierTrader(tradierOrderBuilder):
 
     def __init__(self, user, mongo, logger):
         self.endpoint = tradier_constants.API_ENDPOINT['brokerage'] if RUN_LIVE_TRADER \
@@ -37,8 +37,6 @@ class TradierTrader(tradierOrderBuilder, Tasks):
                         }
 
         tradierOrderBuilder.__init__(self)
-
-        Tasks.__init__(self)
 
     def get_accountbalance(self):
         api_path = tradier_constants.API_PATH['account_balances']
@@ -153,9 +151,23 @@ class TradierTrader(tradierOrderBuilder, Tasks):
         status_code = response.status_code
         return json_response, status_code
 
+    @exception_handler
+    def cancel_order(self, id):
+        api_path = tradier_constants.API_PATH['account_order_status']
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(id))}'
+
+        response = requests.post(path,
+                                 data={},
+                                 headers=self.headers
+                                 )
+
+        json_response = response.json()
+
+        return json_response
+
     # STEP ONE
     @exception_handler
-    def sendOrder(self, trade_data, strategy_object, direction, special_order_type):
+    def sendOrder(self, trade_data, mongo_trader, strategy_object, direction, special_order_type):
 
         symbol = trade_data["Symbol"]
 
@@ -180,12 +192,12 @@ class TradierTrader(tradierOrderBuilder, Tasks):
             if special_order_type == "STANDARD":
 
                 order, obj = self.standardOrder(
-                    trade_data, strategy_object, direction)
+                    trade_data, strategy_object, direction, mongo_trader)
 
             elif special_order_type == "OCO":
 
                 order, obj = self.otoco_order(
-                    trade_data, strategy_object, direction)
+                    trade_data, strategy_object, direction, mongo_trader)
 
             elif special_order_type == "TRAIL":
 
@@ -199,12 +211,12 @@ class TradierTrader(tradierOrderBuilder, Tasks):
             if order_type == "STANDARD":
 
                 order, obj = self.standardOrder(
-                    trade_data, strategy_object, direction)
+                    trade_data, strategy_object, direction, mongo_trader)
 
             elif order_type == "OCO":
 
                 order, obj = self.otoco_order(
-                    trade_data, strategy_object, direction)
+                    trade_data, strategy_object, direction, mongo_trader)
 
             elif order_type == "TRAIL":
 
@@ -220,6 +232,9 @@ class TradierTrader(tradierOrderBuilder, Tasks):
         # PLACE ORDER ################################################
 
         resp, status_code = self.place_order(order)
+
+        if 'errors' in resp.keys() or 'error' in resp.keys():
+            return
 
         resp = resp['order']
 
@@ -319,7 +334,13 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
             spec_order = self.get_order(queue_order['Order_ID'])['order']
 
-            new_status = spec_order["status"]
+            if spec_order['class'] == 'otoco':
+
+                new_status = spec_order['leg'][0]['status']
+
+            else:
+
+                new_status = spec_order["status"]
 
             order_type = queue_order["Order_Type"]
 
@@ -331,7 +352,12 @@ class TradierTrader(tradierOrderBuilder, Tasks):
                     if spec_order["class"] == "otoco":
                         queue_order = {**queue_order, **tradierExtractOCOChildren(spec_order)}
 
-                    # self.pushOrder(queue_order, spec_order)
+                    self.pushOrder(queue_order, spec_order)
+
+                elif IS_TESTING:
+                    if spec_order["class"] == "otoco":
+                        queue_order = {**queue_order, **tradierExtractOCOChildren(spec_order)}
+
                     self.pushOrder(queue_order, spec_order)
 
                 elif new_status == "canceled" or new_status == "rejected" or new_status == "expired":
@@ -379,7 +405,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
             price = spec_order["leg"][0]["price"]
 
-            shares = int(spec_order["quantity"])
+            shares = int(spec_order['leg'][0]["quantity"])
 
         else:
 
@@ -466,6 +492,11 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
             collection_insert = self.mongo.open_positions.insert_one
 
+            try:
+                obj['childOrderStrategies'] = queue_order['childOrderStrategies']
+            except:
+                pass
+
             discord_message_to_push = f":rocket: TradingBOT just opened \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {shares} \n Price: ${price} \n Strategy: {strategy} \n Asset Type: {asset_type} \n Date: {getDatetime()} \n :rocket: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
 
         elif direction == "CLOSE POSITION":
@@ -547,7 +578,7 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
     # RUN TRADER
     @exception_handler
-    def runTrader(self, trade_data, special_order_type="STANDARD"):
+    def runTrader(self, mongo_trader, trade_data, special_order_type="STANDARD"):
         """ METHOD RUNS ON A FOR LOOP ITERATING OVER THE TRADE DATA AND MAKING DECISIONS ON WHAT NEEDS TO BUY OR SELL.
 
         Args:
@@ -654,4 +685,4 @@ class TradierTrader(tradierOrderBuilder, Tasks):
 
             if direction != None:
                 self.sendOrder(row if not open_position else {
-                               **row, **open_position}, strategy_object, direction, special_order_type)
+                               **row, **open_position}, mongo_trader, strategy_object, direction, special_order_type)

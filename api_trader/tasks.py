@@ -2,12 +2,21 @@
 # imports
 import time
 import config
+import pytz
+import requests
+from tradier import tradier_constants
+from datetime import datetime, timedelta
 
 from assets.exception_handler import exception_handler
 from assets.helper_functions import getDatetime, selectSleep, modifiedAccountID
+from discord import discord_helpers
+from tradier import TradierTrader
 
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
+RUN_TRADIER = config.RUN_TRADIER
+MAX_QUEUE_LENGTH = config.MAX_QUEUE_LENGTH
+RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 
 class Tasks:
 
@@ -19,6 +28,18 @@ class Tasks:
     def __init__(self):
 
         self.isAlive = True
+
+        self.endpoint = tradier_constants.API_ENDPOINT['brokerage'] if RUN_LIVE_TRADER \
+            else tradier_constants.API_ENDPOINT['brokerage_sandbox']
+
+        self.account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
+
+        self.tradier_token = config.LIVE_ACCESS_TOKEN if RUN_LIVE_TRADER else config.SANDBOX_ACCESS_TOKEN
+
+        self.headers = {'Authorization': f'Bearer {self.tradier_token}',
+                        'Accept': 'application/json'
+                        }
+
 
     @exception_handler
     def checkOCOpapertriggers(self):
@@ -38,6 +59,19 @@ class Tasks:
                 # CLOSE POSITION
                 pass
 
+    def getTradierorder(self, id):
+
+        api_path = tradier_constants.API_PATH['account_order_status']
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(id))}'
+
+        response = requests.get(path,
+                                params={'includeTags': 'false'},
+                                headers=self.headers
+                                )
+        json_response = response.json()
+
+        return json_response
+
     @exception_handler
     def checkOCOtriggers(self):
         """ Checks OCO triggers (stop loss/ take profit) to see if either one has filled. If so, then close position in mongo like normal.
@@ -51,15 +85,19 @@ class Tasks:
 
             childOrderStrategies = position["childOrderStrategies"]
 
-            for order_id in childOrderStrategies.keys():
+            x = 0
+            for order in childOrderStrategies:
 
-                spec_order = self.tdameritrade.getSpecificOrder(order_id)
+                spec_order = self.tdameritrade.getSpecificOrder(order['Order_ID'])
 
-                new_status = spec_order["status"]
+                if 'error' in spec_order.keys():
+                    spec_order = self.getTradierorder(order['Order_ID'])
+
+                new_status = spec_order['order']["status"]
 
                 if new_status == "FILLED":
 
-                    self.pushOrder(position, spec_order)
+                    TradierTrader.pushOrder(position, spec_order)
 
                 elif new_status == "CANCELED" or new_status == "REJECTED":
 
@@ -81,8 +119,10 @@ class Tasks:
 
                 else:
 
-                    self.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"], "Strategy": position["Strategy"]}, {
-                        "$set": {f"childOrderStrategies.{order_id}.Order_Status": new_status}})
+                    self.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"], "Strategy": position["Strategy"]},
+                        {"$set": {f"childOrderStrategies.{x}.status": new_status}})
+
+                x += 1
 
     @exception_handler
     def extractOCOchildren(self, spec_order):
@@ -133,6 +173,66 @@ class Tasks:
             upsert=True
         )
 
+    @exception_handler
+    def killQueueOrder(self):
+        """ METHOD QUERIES ORDERS IN QUEUE AND LOOKS AT INSERTION TIME.
+            IF QUEUE ORDER INSERTION TIME GREATER THAN TWO HOURS, THEN THE ORDER IS CANCELLED.
+        """
+        # CHECK ALL QUEUE ORDERS AND CANCEL ORDER IF GREATER THAN TWO MINUTES OLD
+        queue_orders = self.mongo.queue.find(
+            {"Trader": self.user["Name"], "Account_ID": self.account_id})
+
+        dt = datetime.now(tz=pytz.UTC).replace(microsecond=0)
+
+        dt_tz = dt.astimezone(pytz.timezone(config.TIMEZONE))
+
+        x_mins_ago = datetime.strptime(datetime.strftime(
+            dt_tz - timedelta(minutes=MAX_QUEUE_LENGTH), "%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S")
+
+        for order in queue_orders:
+
+            order_date = order["Entry_Date"]
+
+            side = order["Side"]
+
+            id = order["Order_ID"]
+
+            forbidden = ["REJECTED", "CANCELED", "FILLED", "rejected", "canceled", 'filled', 'expired']
+
+            pre_symbol = order["Pre_Symbol"]
+
+            if x_mins_ago > order_date and (side == "BUY" or side == "BUY_TO_OPEN") and id != None and order["Order_Status"] not in forbidden:
+
+                # FIRST CANCEL ORDER
+                if RUN_TRADIER:
+                    resp = self.cancel_order(id)
+                else:
+                    resp = self.tdameritrade.cancelOrder(id)
+
+                if resp.status_code == 200 or resp.status_code == 201:
+
+                    other = {
+                        "Symbol": order["Symbol"],
+                        "Pre_Symbol": order["Pre_Symbol"],
+                        "Order_Type": order["Order_Type"],
+                        "Order_Status": "CANCELED",
+                        "Strategy": order["Strategy"],
+                        "Account_ID": self.account_id,
+                        "Trader": self.user["Name"],
+                        "Date": getDatetime()
+                    }
+
+                    self.other.insert_one(other)
+
+                    self.queue.delete_one(
+                        {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]})
+
+                    self.logger.INFO(
+                        f"CANCELED ORDER FOR {order['Symbol']} - TRADER: {self.user['Name']}", True)
+
+                    discord_alert = f"TradingBOT just cancelled order for: {pre_symbol}"
+                    discord_helpers.send_discord_alert(discord_alert)
+
     def runTasks(self):
         """ METHOD RUNS TASKS ON WHILE LOOP EVERY 5 - 60 SECONDS DEPENDING.
         """
@@ -146,6 +246,7 @@ class Tasks:
 
                 # RUN TASKS ####################################################
                 self.checkOCOtriggers()
+                self.killQueueOrder()
 
                 ##############################################################
 

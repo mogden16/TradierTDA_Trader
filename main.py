@@ -240,7 +240,7 @@ class Main:
                 resp = list(self.traders.values())[0].tdameritrade.sendRequest(url)
                 expdatemapkey = alert['Option_Type'].lower() + "ExpDateMap"
 
-                if list(resp.keys())[0] == "error":
+                if list(resp.keys())[0] == "error" or resp['status'] == "FAILED":
                     print(f'error scanning for {alert["Pre_Symbol"]}')
                     print(resp)
                     self.error += 1
@@ -388,7 +388,7 @@ class Main:
             for mongo_trader in self.traders.values():
                 temp_trade_data = self.get_tradeFormat(mongo_trader, value, trade_signal, trade_type, "TRUE" if isRunner else "FALSE")
                 for trade_data in temp_trade_data:
-                    self.tradier.runTrader(trade_data)
+                    self.tradier.runTrader(mongo_trader, trade_data)
 
     def run(self):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
@@ -449,53 +449,53 @@ class Main:
                 print('errors', main.error)
 
 
-            """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF 
-            QUEUED ORDERS ON TRADIER & MONGO """
-            tradier_queued_list = []
-            tradier_queued = self.tradier.get_queuedPositions()
-            if len(tradier_queued) == 0 or tradier_queued == 'null':
-                traider_queued = []
-            else:
-                for queued in tradier_queued:
-                    tradier_queued_list.append(queued['id'])
-
-            mongo_queued_list = []
-            mongo_queued = list(self.mongo.queue.find({}))
-            for queued in mongo_queued:
-                mongo_queued_list.append(queued['Order_ID'])
-
-            tradier_queued_list.sort()
-            mongo_queued_list.sort()
-
-            if tradier_queued_list == mongo_queued_list:
-                pass
-            else:
-                print(f'something went wrong, tradier queued={tradier_queued} and mongo queued={mongo_queued}')
-
-            """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF 
-            OPEN ORDERS ON TRADIER & MONGO """
-            tradier_open_list = []
-            tradier_open = self.tradier.get_openPositions()
-            if len(tradier_open) == 0 or tradier_open['positions'] == 'null':
-                pass
-            elif len(tradier_open) == 1:
-                tradier_open_list.append(tradier_open['positions']['position']['id'])
-            else:
-                tradier_open = tradier_open['positions']['position']
-                for openn in tradier_open:
-                    tradier_open_list.append(openn['id'])
-
-            mongo_open_list = []
-            mongo_open = list(self.mongo.open_positions.find({}))
-            for openn in mongo_open:
-                mongo_open_list.append(openn['Order_ID'])
-
-            tradier_open_list.sort()
-            mongo_open_list.sort()
-            if tradier_open_list == mongo_open_list:
-                pass
-            else:
-                print(f'something went wrong, tradier openOrders={tradier_open} and mongo openOrders={mongo_open}')
+            # """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF
+            # QUEUED ORDERS ON TRADIER & MONGO """
+            # tradier_queued_list = []
+            # tradier_queued = self.tradier.get_queuedPositions()
+            # if len(tradier_queued) == 0 or tradier_queued == 'null':
+            #     traider_queued = []
+            # else:
+            #     for queued in tradier_queued:
+            #         tradier_queued_list.append(queued['id'])
+            #
+            # mongo_queued_list = []
+            # mongo_queued = list(self.mongo.queue.find({}))
+            # for queued in mongo_queued:
+            #     mongo_queued_list.append(queued['Order_ID'])
+            #
+            # tradier_queued_list.sort()
+            # mongo_queued_list.sort()
+            #
+            # if tradier_queued_list == mongo_queued_list:
+            #     pass
+            # else:
+            #     print(f'something went wrong, tradier queued={tradier_queued} and mongo queued={mongo_queued}')
+            #
+            # """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF
+            # OPEN ORDERS ON TRADIER & MONGO """
+            # tradier_open_list = []
+            # tradier_open = self.tradier.get_openPositions()
+            # if len(tradier_open) == 0 or tradier_open['positions'] == 'null':
+            #     pass
+            # elif len(tradier_open) == 1:
+            #     tradier_open_list.append(tradier_open['positions']['position']['id'])
+            # else:
+            #     tradier_open = tradier_open['positions']['position']
+            #     for openn in tradier_open:
+            #         tradier_open_list.append(openn['id'])
+            #
+            # mongo_open_list = []
+            # mongo_open = list(self.mongo.open_positions.find({}))
+            # for openn in mongo_open:
+            #     mongo_open_list.append(openn['Order_ID'])
+            #
+            # tradier_open_list.sort()
+            # mongo_open_list.sort()
+            # if tradier_open_list == mongo_open_list:
+            #     pass
+            # else:
+            #     print(f'something went wrong, tradier openOrders={tradier_open} and mongo openOrders={mongo_open}')
 
             time.sleep(helper_functions.selectSleep())
 
