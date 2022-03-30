@@ -4,7 +4,6 @@
 RUN_LIVE_TRADER = False     # THIS APPLIES TO TDA OR TRADIER (TDA WILL ALSO HAVE TO BE SET TO "LIVE" IN MONGO
 RUN_TRADIER = True   # IF SET TO FALSE, IT WILL RUN TD API
 
-
 IS_TESTING = False    # SET TO TRUE IF OUTSIDE MARKET HOURS
 TRADE_HEDGES = False
 
@@ -32,8 +31,10 @@ MIN_VOLUME = 1000
 MIN_DELTA = .3
 
 # ORDERS #
+GET_PRICE_FROM_TD = True
 BUY_PRICE = 'bidPrice'  # bidPrice, askPrice, lastPrice
 SELL_PRICE = 'askPrice'  # bidPrice, askPrice, lastPrice
+MAX_QUEUE_LENGTH = 3 # minutes
 
 # OCO #
 TAKE_PROFIT_PERCENTAGE = .1
@@ -53,7 +54,7 @@ API_KEY = 'XXXXXXXXXXXXXXXXXXXXXXXXX@AMER.OAUTHAP'
 REDIRECT_URI = 'https://localhost'
 ACCOUNT_ID = 1234567890
 HEARTBEAT_SETTING = 10
-STREAMPRICE_LINK = 'askPrice'     # Do you want to track the askPrice, bidPrice, lastPrice
+STREAMPRICE_LINK = 'ASK'     # Do you want to track the ASK, BID, LAST
 
 #TOKEN_PATH = '/Users/mattogden/thinkorswim/TradingBOT/tradierAPI/tdameritrade/token'
 TOKEN_PATH = 'Z:/thinkorswim/TradingBOT/tradierAPI/tdameritrade/token'
