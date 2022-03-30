@@ -480,7 +480,7 @@ class TradierTrader(tradierOrderBuilder):
 
             obj["Qty"] = shares
 
-            obj["Price"] = price
+            obj["Entry_Price"] = price
 
             obj["Entry_Date"] = getDatetime()
 
@@ -506,7 +506,7 @@ class TradierTrader(tradierOrderBuilder):
 
             obj["Qty"] = position["Qty"]
 
-            obj["Price"] = position["Price"]
+            obj["Entry_Price"] = position["Price"]
 
             obj["Entry_Date"] = position["Entry_Date"]
 
@@ -514,13 +514,13 @@ class TradierTrader(tradierOrderBuilder):
 
             obj["Exit_Date"] = getDatetime()
 
-            exit_price = round(price * position["Qty"], 2)
-
-            entry_price = round(position["Price"] * position["Qty"], 2)
+            # exit_price = round(price * position["Qty"], 2)
+            #
+            # entry_price = round(position["Price"] * position["Qty"], 2)
 
             collection_insert = self.mongo.closed_positions.insert_one
 
-            discord_message_to_push = f":closed_book: TradingBOT just closed \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {position['Qty']} \n Entry Price: ${position['Price']} \n Entry Date: {position['Entry_Date']} \n Exit Price: ${price} \n Exit Date: {getDatetime()} \n Strategy: {strategy} \n Asset Type: {asset_type} \n :closed_book: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
+            discord_message_to_push = f":closed_book: TradingBOT just closed \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {position['Qty']} \n Entry Price: ${position['Entry_Price']} \n Entry Date: {position['Entry_Date']} \n Exit Price: ${price} \n Exit Date: {getDatetime()} \n Strategy: {strategy} \n Asset Type: {asset_type} \n :closed_book: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
 
             # REMOVE FROM OPEN POSITIONS
             is_removed = self.mongo.open_positions.delete_one(

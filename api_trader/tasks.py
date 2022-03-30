@@ -6,11 +6,11 @@ import pytz
 import requests
 from tradier import tradier_constants
 from datetime import datetime, timedelta
+from pymongo.errors import WriteError, WriteConcernError
 
 from assets.exception_handler import exception_handler
 from assets.helper_functions import getDatetime, selectSleep, modifiedAccountID
 from discord import discord_helpers
-from tradier import TradierTrader
 
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
@@ -72,6 +72,202 @@ class Tasks:
 
         return json_response
 
+    def cancelTradierorder(self, id):
+
+        api_path = tradier_constants.API_PATH['account_order_status']
+        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.account_id)).replace("{id}", str(id))}'
+
+        response = requests.delete(path,
+                                data={},
+                                headers=self.headers
+                                )
+        json_response = response.json()
+
+        return json_response
+
+    def tradiercloseOrder(self, queue_order, spec_order, data_integrity="Reliable"):
+        """ METHOD PUSHES ORDER TO EITHER OPEN POSITIONS OR CLOSED POSITIONS COLLECTION IN MONGODB.
+            IF BUY ORDER, THEN PUSHES TO OPEN POSITIONS.
+            IF SELL ORDER, THEN PUSHES TO CLOSED POSITIONS.
+
+        Args:
+            queue_order ([dict]): [QUEUE ORDER DATA FROM QUEUE]
+            spec_order ([dict(json)]): [ORDER DATA FROM TDAMERITRADE]
+        """
+
+        symbol = queue_order["Symbol"]
+
+        if 'stop_price' in spec_order.keys():
+
+            price = spec_order['stop_price']
+
+        else:
+
+            price = spec_order["price"]
+
+        shares = int(queue_order["Qty"])
+
+        strategy = queue_order["Strategy"]
+
+        side = spec_order["side"]
+
+        account_id = queue_order["Account_ID"]
+
+        position_size = queue_order["Position_Size"]
+
+        asset_type = queue_order["Asset_Type"]
+
+        if asset_type == "OPTION":
+
+            price = round(price, 2)
+
+        else:
+            price = round(price, 2) if price >= 1 else round(price, 4)
+
+        position_type = queue_order["Position_Type"]
+
+        direction = "CLOSE POSITION"
+
+        account_position = queue_order["Account_Position"]
+
+        order_type = queue_order["Order_Type"]
+
+        obj = {
+            "Symbol": symbol,
+            "Strategy": strategy,
+            "Position_Size": position_size,
+            "Position_Type": position_type,
+            "Data_Integrity": data_integrity,
+            "Trader": self.user["Name"],
+            "Account_ID": account_id,
+            "Asset_Type": asset_type,
+            "Account_Position": account_position,
+            "Order_Type": order_type
+        }
+
+        if asset_type == "OPTION":
+            obj["Pre_Symbol"] = queue_order["Pre_Symbol"]
+
+            pre_symbol = queue_order["Pre_Symbol"]
+
+            obj["Exp_Date"] = queue_order["Exp_Date"]
+
+            obj["Option_Type"] = queue_order["Option_Type"]
+
+            obj["Strike_Price"] = queue_order["Strike_Price"]
+
+            obj['isRunner'] = queue_order["isRunner"]
+
+            obj['Bid_Price'] = price
+
+            obj['Ask_Price'] = price
+
+            obj['Last_Price'] = price
+
+        collection_insert = None
+
+        message_to_push = None
+
+        if direction == "OPEN POSITION":
+
+            obj["Qty"] = shares
+
+            obj["Entry_Price"] = price
+
+            obj["Entry_Date"] = getDatetime()
+
+            obj["Max_Price"] = price
+
+            obj['Order_ID'] = queue_order['Order_ID']
+
+            obj["Trail_Stop_Value"] = price * TRAILSTOP_PERCENTAGE
+
+            collection_insert = self.mongo.open_positions.insert_one
+
+            try:
+                obj['childOrderStrategies'] = queue_order['childOrderStrategies']
+
+            except:
+                pass
+
+            discord_message_to_push = f":rocket: TradingBOT just opened \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {shares} \n Price: ${price} \n Strategy: {strategy} \n Asset Type: {asset_type} \n Date: {getDatetime()} \n :rocket: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
+
+        elif direction == "CLOSE POSITION":
+
+            position = self.mongo.open_positions.find_one(
+                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy})
+
+            obj["Qty"] = position["Qty"]
+
+            obj["Entry_Price"] = position["Entry_Price"]
+
+            obj["Entry_Date"] = position["Entry_Date"]
+
+            obj["Exit_Price"] = price
+
+            obj["Exit_Date"] = getDatetime()
+
+            # exit_price = round(price * position["Qty"], 2)
+            #
+            # entry_price = round(position["Price"] * position["Qty"], 2)
+
+            collection_insert = self.mongo.closed_positions.insert_one
+
+            discord_message_to_push = f":closed_book: TradingBOT just closed \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {position['Qty']} \n Entry Price: ${position['Entry_Price']} \n Entry Date: {position['Entry_Date']} \n Exit Price: ${price} \n Exit Date: {getDatetime()} \n Strategy: {strategy} \n Asset Type: {asset_type} \n :closed_book: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
+
+            # REMOVE FROM OPEN POSITIONS
+            is_removed = self.mongo.open_positions.delete_one(
+                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy})
+
+            try:
+
+                if int(is_removed.deleted_count) == 0:
+                    self.logger.error(
+                        f"INITIAL FAIL OF DELETING OPEN POSITION FOR SYMBOL {symbol} - {self.user['Name']} ({modifiedAccountID(self.account_id)})")
+
+                    self.mongo.open_positions.delete_one(
+                        {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy})
+
+            except Exception:
+
+                msg = f"{self.user['Name']} - {modifiedAccountID(self.account_id)} - {traceback.format_exc()}"
+
+                self.logger.error(msg)
+
+        # PUSH OBJECT TO MONGO. IF WRITE ERROR THEN ONE RETRY WILL OCCUR. IF YOU SEE THIS ERROR, THEN YOU MUST CONFIRM THE PUSH OCCURED.
+        try:
+
+            collection_insert(obj)
+
+        except WriteConcernError as e:
+
+            self.logger.error(
+                f"INITIAL FAIL OF INSERTING OPEN POSITION FOR SYMBOL {symbol} - DATE/TIME: {getDatetime()} - DATA: {obj} - {e}")
+
+            collection_insert(obj)
+
+        except WriteError as e:
+
+            self.logger.error(
+                f"INITIAL FAIL OF INSERTING OPEN POSITION FOR SYMBOL {symbol} - DATE/TIME: {getDatetime()} - DATA: {obj} - {e}")
+
+            collection_insert(obj)
+
+        except Exception:
+
+            msg = f"{self.user['Name']} - {modifiedAccountID(self.account_id)} - {traceback.format_exc()}"
+
+            self.logger.error(msg)
+
+        self.logger.info(
+            f"Pushing {side} Order For {symbol} To {'Open Positions' if direction == 'OPEN POSITION' else 'Closed Positions'} ({modifiedAccountID(self.account_id)})")
+
+        # REMOVE FROM QUEUE
+        self.mongo.queue.delete_one({"Trader": self.user["Name"], "Symbol": symbol,
+                                     "Strategy": strategy, "Account_ID": self.account_id})
+
+        discord_helpers.send_discord_alert(discord_message_to_push)
+
     @exception_handler
     def checkOCOtriggers(self):
         """ Checks OCO triggers (stop loss/ take profit) to see if either one has filled. If so, then close position in mongo like normal.
@@ -95,11 +291,11 @@ class Tasks:
 
                 new_status = spec_order['order']["status"]
 
-                if new_status == "FILLED":
+                if new_status.upper() == "FILLED":
 
-                    TradierTrader.pushOrder(position, spec_order)
+                    self.tradiercloseOrder(position, spec_order['order'])
 
-                elif new_status == "CANCELED" or new_status == "REJECTED":
+                elif new_status.upper() == "CANCELED" or new_status.upper() == "REJECTED" or new_status.upper() == "EXPIRED":
 
                     other = {
                         "Symbol": position["Symbol"],
@@ -205,11 +401,12 @@ class Tasks:
 
                 # FIRST CANCEL ORDER
                 if RUN_TRADIER:
-                    resp = self.cancel_order(id)
+                    resp = self.cancelTradierorder(id)
+
                 else:
                     resp = self.tdameritrade.cancelOrder(id)
 
-                if resp.status_code == 200 or resp.status_code == 201:
+                if 'ok' in resp['order']['status'] or resp.status_code == 200 or resp.status_code == 201:
 
                     other = {
                         "Symbol": order["Symbol"],
@@ -222,13 +419,13 @@ class Tasks:
                         "Date": getDatetime()
                     }
 
-                    self.other.insert_one(other)
+                    self.canceled.insert_one(other)
 
                     self.queue.delete_one(
                         {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]})
 
-                    self.logger.INFO(
-                        f"CANCELED ORDER FOR {order['Symbol']} - TRADER: {self.user['Name']}", True)
+                    self.logger.info(
+                        f"CANCELED ORDER FOR {order['Symbol']} - TRADER: {self.user['Name']}", extra={'log': True})
 
                     discord_alert = f"TradingBOT just cancelled order for: {pre_symbol}"
                     discord_helpers.send_discord_alert(discord_alert)
