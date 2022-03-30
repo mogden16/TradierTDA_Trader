@@ -1,11 +1,14 @@
 import config
 import polygon
+from assets.helper_functions import getDatetime
+from tdameritrade import TDAmeritrade
 
 RUNNER_FACTOR = config.RUNNER_FACTOR
 IS_TESTING = config.IS_TESTING
 
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
+GET_PRICE_FROM_TD = config.GET_PRICE_FROM_TD
 
 class tradierOrderBuilder:
 
@@ -29,7 +32,7 @@ class tradierOrderBuilder:
             "Direction": None
         }
 
-    def standardOrder(self, trade_data, strategy_object, direction):
+    def standardOrder(self, trade_data, strategy_object, direction, mongo_trader):
 
         isRunner = trade_data['isRunner']
 
@@ -129,6 +132,8 @@ class tradierOrderBuilder:
 
             self.obj['Qty'] = qty
 
+            self.obj['Entry_Date'] = getDatetime()
+
         else:
 
             self.logger.warning(f"{side} ORDER STOPPED: STRATEGY STATUS - {strategy_object['Active']} SHARES - {qty}")
@@ -147,8 +152,7 @@ class tradierOrderBuilder:
 
         return self.order, self.obj
 
-
-    def otoco_order(self, trade_data, strategy_object, direction):
+    def otoco_order(self, trade_data, strategy_object, direction, mongo_trader):
 
         asset_type = "OPTION" if "Pre_Symbol" in trade_data else "EQUITY"
 
@@ -186,17 +190,31 @@ class tradierOrderBuilder:
 
             if not IS_TESTING:
 
-                symbol_for_quote = trading_symbol if asset_type == "OPTION" else symbol
+                if GET_PRICE_FROM_TD:
 
-                resp = self.get_quote(symbol_for_quote)
+                    resp = mongo_trader.tdameritrade.getQuote(symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"])
 
-                if side == "BUY_TO_OPEN" or side == "BUY":
+                    if asset_type == "EQUITY":
+                        if side in ['BUY', 'BUY_TO_OPEN', 'BUY_TO_CLOSE']:
+                            price = float(resp[symbol][config.BUY_PRICE])
+                        else:
+                            price = float(resp[symbol][config.SELL_PRICE])
 
-                    price = resp[f'{config.BUY_PRICE}']
+                    else:
+                        if side in ['BUY', 'BUY_TO_OPEN', 'BUY_TO_CLOSE']:
+                            price = float(resp[trade_data['Pre_Symbol']][config.BUY_PRICE])
+                        else:
+                            price = float(resp[trade_data['Pre_Symbol']][config.SELL_PRICE])
 
                 else:
+                    symbol_for_quote = trading_symbol if asset_type == "OPTION" else symbol
+                    resp = self.get_quote(symbol_for_quote)
 
-                    price = resp[f'{config.SELL_PRICE}']
+                    if side == "BUY_TO_OPEN" or side == "BUY":
+                        price = resp[f'{config.BUY_PRICE}']
+
+                    else:
+                        price = resp[f'{config.SELL_PRICE}']
 
             else:
 
@@ -236,6 +254,26 @@ class tradierOrderBuilder:
         self.order['option_symbol[2]'] = trading_symbol
         self.order['side[2]'] = 'sell_to_close'
         self.order['stop[2]'] = str(round(entry_price * (1 - STOP_LOSS_PERCENTAGE),2))
+
+        self.obj['Strategy'] = strategy
+        self.obj['Symbol'] = symbol
+        self.obj['Side'] = side
+        self.obj['Account_ID'] = self.account_id
+        self.obj['Asset_Type'] = asset_type
+        self.obj['Trade_Type'] = trade_type
+        self.obj['Order_Type'] = strategy_object["Order_Type"]
+        self.obj['Pre_Symbol'] = trade_data['Pre_Symbol']
+        self.obj['Exp_Date'] = trade_data['Exp_Date']
+        self.obj['Option_Type'] = trade_data['Option_Type']
+        self.obj['isRunner'] = trade_data['isRunner']
+        self.obj['Price'] = float(price)
+        self.obj['Qty'] = float(qty)
+        self.obj['Position_Size'] = float(position_size)
+        self.obj['Trader'] = self.user['Name']
+        self.obj['Position_Type'] = strategy_object["Position_Type"]
+        self.obj['isRunner'] = trade_data['isRunner']
+        self.obj['Direction'] = direction
+        self.obj['Entry_Date'] = getDatetime()
 
         return self.order, self.obj
 
