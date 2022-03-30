@@ -2,7 +2,7 @@
 
 ## Description
 
-- This automated trading bot utilitizes, TDameritrade API, TD Websocket API, Tradier API, Gmail API, Discord integration and MongoDB API.
+- This automated trading bot utilitizes, TDameritrade API, TD Websocket API, Tradier API, Gmail API, Discord integration and MongoDB.
 
 ## Table Of Contents
 
@@ -27,23 +27,28 @@
 
 ## <a name="how-it-works"></a> How it works (in a nutshell)
 
-There are many ways to run this bot:
-- You can run it using Trey Thomas's way of using TD API to scan alerts (gmail alerts)
-- You can run it scanning discord notifications
-- You can filter these alerts (discord & gmail) to run a technical analysis before you trade it
-- right now this is just configured using Hull Moving Average & QQE (trending up/down while not being overbought/oversold)
-- The open positions will then be continuously scanned and updating in pricing. Depending on the strategy, it will sell out of the position.
-
+- There are many ways to run this bot:
+  - BROKER
+    - You can specify your broker (TD or Tradier and can be changed via config.py)
+  - ALERTS
+    - You can run it using Trey Thomas's way of using TD API to scan alerts (gmail alerts)
+    - You can run it scanning discord notifications
+  - TECHNICAL ANLYSIS
+    - You can filter these alerts (discord & gmail) to run a technical analysis before you trade it (can be turned off in config.py)
+    - Right now, this is just configured using Hull Moving Average & QQE (trending up/down while not being overbought/oversold)
+  - WEBSOCKET
+    - Open positions in Mongo will be picked up by the TD Websocket API (if turned on) and will continuously give you an update on pricing. Depending on the strategy, it might sell out of the position
+* To assist in getting your websocket set up, I recommend watching this video: (Part Time Larry - TD Websocket) https://www.youtube.com/watch?v=P5YanfJFlNs
 ### **Thinkorswim**
 
 1. Develop strategies in Thinkorswim.
 2. Create a scanner for your strategy. (Scanner name will have specific format needed)
 3. Set your scanner to send alerts to your non-personal gmail.
-4. When a symbol is populated into the scanner, an alert is triggered and sent to gmail.
+4. When a symbol is populated into the scanner with "buy" or "buy_to_open", an alert is triggered and sent to gmail.
 
 ### **Discord**
 
-1. I personally use https://www.teklutrades.com/FlowAnalysis, I think he's very knowledgeable and a great programmer.
+1. I personally use https://www.teklutrades.com/FlowAnalysis, I couldn't recommend his work enough.
 2. It's $40/month but the alerts are formatted well.
 
 ### **Trading Bot (Python)**
@@ -68,7 +73,7 @@ There are many ways to run this bot:
 
 - For the OCO orders, the bot uses a task to check your TDA account to see if any OCO exits have triggered.
 
-- **ATTENTION** - The bot is designed to either paper trade or live trade, but not at the same time. You can do one or the other. This can be changed by the value set for the "Account_Position" field located in your account object stored in the users collection in mongo. The options for this field are "Paper" and "Live". These are case sensitive. By default when the account is created, it is set to "Paper" as a safety precaution for the user.
+- **ATTENTION** - The bot is designed to either paper trade or live trade, but not at the same time. You can do one or the other. This can be changed by: TD --> the value set for the "Account_Position" field located in your account object stored in the users collection in mongo. The options for this field are "Paper" and "Live". These are case sensitive. By default when the account is created, it is set to "Paper" as a safety precaution for the user.  TRADIER --> switch your RUN_LIVE_TRADER in config.py to True
 
 ---
 
@@ -165,7 +170,7 @@ There are many ways to run this bot:
 
 - You will need an access token and refresh token for each account you wish to use.
 - This will allow you to connect to your TDA account through the API.
-- Here is my [repo](https://github.com/TreyThomas93/TDA-Token) to help you to get these tokens and save them to your mongo database, in your users collection.
+- Here is Trey Thomas's [repo](https://github.com/TreyThomas93/TDA-Token) to help you to get these tokens and save them to your mongo database, in your users collection.
 
 ### <a name="gmail"></a> **GMAIL**
 
@@ -201,13 +206,16 @@ There are many ways to run this bot:
 
 - The collections you will find in the Api_Trader database will be the following:
 
-  1. users
-  2. queue
-  3. open_positions
-  4. closed_positions
-  5. rejected
-  6. canceled
-  7. strategies
+1. analysis
+2. users
+3. queue
+4. open_positions
+5. closed_positions
+6. rejected
+7. canceled
+8. strategies
+
+- The analysis collection stores all alerts so that the bot recognizes a duplicate alert (tracks timestamp of alert & symbol)
 
 - The users collection stores all users and their individial data, such as name and accounts.
 
@@ -228,8 +236,9 @@ There are many ways to run this bot:
 ### <a name="pushsafer"></a> **PUSHSAFER**
 
 ---
+- Pushsafer IS integrated, but personally, I use a discord webhook to a personal server since it's a free service
 
-- Pushsafer allows you to send and receive push notifications to your phone from the program.
+- If you choose to use it, Pushsafer allows you to send and receive push notifications to your phone from the program.
 
 - This is handy for knowing in real time when trades are placed.
 
@@ -240,7 +249,7 @@ There are many ways to run this bot:
 
 - You will also need to pay for API calls, which is about $1 for 1,000 calls.
 
-- You will also need to store your api key in your code in a config.env file.
+- You will also need to store your api key in your code in a config.py file.
 
 ### <a name="discrepencies"></a> **DISCREPENCIES**
 
@@ -252,8 +261,11 @@ There are many ways to run this bot:
   1. TDAmeritrades API is buggy at times, and you may lose connection, or not get correct responses after making requests.
   2. Thinkorswim scanners update every 3-5 minutes, and sometimes symbols wont populate at a timely rate. I've seen some to where it took 20-30 minutes to finally send an alert.
   3. Gmail servers could go down aswell. That has happened in the past, but not very common.
-  4. And depending on who you have hosting your server for the program, that is also subject to go down sometimes, either for maintenance or for other reasons.
-  5. As for refreshing the refresh token, I have been running into issues when renewing it. The TDA API site says the refresh token will expire after 90 days, but for some reason It won't allow you to always renew it and may give you an "invalid grant" error, so you may have to play around with it or even recreate everything using this [repo](https://github.com/TreyThomas93/TDA-Token). Just make sure you set it to existing user in the script so it can update your account.
+  4. MongoDB can go down at times and the bot may do unexpected things.
+  5. Discord notifications are often spotty, so the alerts may not come in at times either.
+  6. And depending on who you have hosting your server for the program, that is also subject to go down sometimes, either for maintenance or for other reasons.
+  7. As for refreshing the refresh token, I have been running into issues when renewing it. The TDA API site says the refresh token will expire after 90 days, but for some reason It won't allow you to always renew it and may give you an "invalid grant" error, so you may have to play around with it or even recreate everything using this [repo](https://github.com/TreyThomas93/TDA-Token). Just make sure you set it to existing user in the script so it can update your account.
+  8. Lastly, running the websocket with TD as your broker, will need high supervision.  The websocket executes the close orders, so if there's an error and the bot stops, the position will never be closed.
 
 - The program is very indirect, and lots of factors play into how well it performs. For the most part, it does a great job.
 
@@ -274,42 +286,21 @@ There are many ways to run this bot:
 
 - PushSafer -- Less than $5 / month
 
-### <a name="code-counter"></a> **CODE COUNTER**
+> DISCORD NOTIFICATIONS
 
----
+- TekluTrades -- $49 / month
 
-- Total : 15 files, 1768 codes, 271 comments, 849 blanks, all 2888 lines
-
-## Languages
-
-| language | files | code | comment | blank | total |
-| :------- | ----: | ---: | ------: | ----: | ----: |
-| Python   |    12 |  982 |     271 |   719 | 1,972 |
-| JSON     |     1 |  576 |       0 |     1 |   577 |
-| Markdown |     1 |  190 |       0 |   125 |   315 |
-| toml     |     1 |   20 |       0 |     4 |    24 |
-
-## Directories
-
-| path         | files |  code | comment | blank | total |
-| :----------- | ----: | ----: | ------: | ----: | ----: |
-| .            |    15 | 1,768 |     271 |   849 | 2,888 |
-| api_trader   |     3 |   492 |     102 |   306 |   900 |
-| assets       |     5 |   114 |      34 |   100 |   248 |
-| gmail        |     1 |   122 |      34 |   107 |   263 |
-| mongo        |     1 |    36 |       1 |    30 |    67 |
-| tdameritrade |     1 |   138 |      85 |   113 |   336 |
 
 ### <a name="final-thoughts-and-support"></a> **FINAL THOUGHTS**
 
 ---
 
-- This is in continous development, with hopes to make this program as good as it can possibly get. I know this README might not do it justice with giving you all the information you may need, and you most likely will have questions. Therefore, don't hesitate to contact me either via Github or email. As for you all, I would like your input on how to improve this, and I also heavily encourage you to fork the code and send me your improvements. I appreciate all the support! Thanks, Trey.
+- I honestly cannot thank Trey enough for getting this base code started and his help along the way when I first got this started.  I didn't know much Python when I started this journey in early 2021 so Trey's help was monumental.  This is in continous development, with hopes to make this program as good as it can possibly get. I know this README might not do it justice with giving you all the information you may need, and you most likely will have questions. Therefore, don't hesitate to contact me on Discord below. As for you all, I would like your input on how to improve this. I appreciate all the support! Thanks, Matt.
 
-- > _DISCORD GROUP_ - I have created a Discord group to allow for a more interactive enviroment that will allow for all of us to answer questions and talk about the program. <a href="https://discord.gg/yxrgUbp2A5">Discord Group</a>
+- > _DISCORD GROUP_ - Trey created a Discord group to allow for a more interactive enviroment that will allow for all of us to answer questions and talk about the program.  I am the mod on there if you have any questions <a href="https://discord.gg/yxrgUbp2A5">Discord Group</a>
 
-- If you like backtesting with Thinkorswim, here's a [repo](https://github.com/TreyThomas93/TOS-Auto-Export) of mine that may help you export strategy reports alot faster.
+- I'm currently working a backtest into this to backtest your entries from your closed positions
 
 - Also, If you like what I have to offer, please support me here!
 
-<a href="https://www.buymeacoffee.com/TreyThomas"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee?&emoji=&slug=TreyThomas&button_colour=604343&font_colour=ffffff&font_family=Inter&outline_colour=ffffff&coffee_colour=FFDD00"></a>
+> Venmo -  **@Matt-Ogden**
