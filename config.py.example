@@ -1,21 +1,22 @@
 
 ####################### THE FILENAME WILL NEED TO BE CHANGED FROM config.py.example TO config.env TO ALLOW THE BOT TO USE THE ENVIRONMENTAL VARIABLES ###############################
-# RUN LIVE TRADER. IF SET TO TRUE, LIVE TRADER WILL RUN AND PAPER TRADER WILL NOT RUN. IF SET TO FALSE, ONLY PAPER TRADER WILL RUN #
-RUN_LIVE_TRADER = False     # THIS APPLIES TO TDA OR TRADIER (TDA WILL ALSO HAVE TO BE SET TO "LIVE" IN MONGO
-RUN_TRADIER = True   # IF SET TO FALSE, IT WILL RUN TD API
 
-IS_TESTING = False    # SET TO TRUE IF OUTSIDE MARKET HOURS
-TRADE_HEDGES = False
+# RUN LIVE TRADER. IF SET TO TRUE, LIVE TRADER WILL RUN AND PAPER TRADER WILL NOT RUN. IF SET TO FALSE, ONLY PAPER TRADER WILL RUN #
+RUN_LIVE_TRADER = False    # THIS APPLIES TO TDA OR TRADIER (TDA WILL ALSO HAVE TO BE SET TO "LIVE" IN MONGO
+RUN_TRADIER = True         # IF SET TO FALSE, IT WILL RUN TD API
+
+IS_TESTING = False         # SET TO TRUE IF OUTSIDE MARKET HOURS
+TRADE_HEDGES = True
 
 # MONGO #
-MONGO_URI = 'mongodb+srv://XXXXXXX:XXXXXXXXXX@cluster1.XXXXXX.mongodb.net/Api_Trader?retryWrites=true&w=majority'
+MONGO_URI = 'mongodb+srv://mogden16:Yankees16!@cluster1.6jzau.mongodb.net/Api_Trader?retryWrites=true&w=majority'
 
 # CONNECT TO GMAIL #
 RUN_GMAIL = True
 RUN_DISCORD = True
 
 # PUSHSAFER #
-#PUSH_API_KEY = *enter pushsafer api key here*
+# PUSH_API_KEY = *enter pushsafer api key here*
 
 # PYTZ TIMEZONE #
 TIMEZONE = 'US/Eastern'
@@ -27,14 +28,14 @@ RUN_WEBSOCKET = True
 ##########################   TRADING CRITERIA   #################
 MIN_OPTIONPRICE = .5
 MAX_OPTIONPRICE = 3
-MIN_VOLUME = 1000
+MIN_VOLUME = 2000
 MIN_DELTA = .3
 
 # ORDERS #
 GET_PRICE_FROM_TD = True
-BUY_PRICE = 'bidPrice'  # bidPrice, askPrice, lastPrice
-SELL_PRICE = 'askPrice'  # bidPrice, askPrice, lastPrice
-MAX_QUEUE_LENGTH = 3 # minutes
+BUY_PRICE = 'askPrice'      # bidPrice, askPrice, lastPrice, mark
+SELL_PRICE = 'askPrice'     # bidPrice, askPrice, lastPrice, mark
+MAX_QUEUE_LENGTH = 3        # minutes
 
 # OCO #
 TAKE_PROFIT_PERCENTAGE = .1
@@ -43,40 +44,40 @@ STOP_LOSS_PERCENTAGE = .2
 # TRAIL #
 TRAIL_STOP_PERCENTAGE = .5
 
-RUNNER_FACTOR = .5    # ONLY MATTERS IF YOU'RE DOING A RUNNER STRATEGY
+RUNNER_FACTOR = .5          # ONLY MATTERS IF YOU'RE DOING A RUNNER STRATEGY
 
 ###################     TECHNICAL ANALYSIS   ####################
 RUN_TA = False
 RUN_30M_TA = False
 
 ############################     TD STREAMING   #################
-API_KEY = 'XXXXXXXXXXXXXXXXXXXXXXXXX@AMER.OAUTHAP'
+API_KEY = 'thisismyAPIkeyfam@AMER.OAUTHAP'
 REDIRECT_URI = 'https://localhost'
-ACCOUNT_ID = 1234567890
+ACCOUNT_ID = 9876543210
 HEARTBEAT_SETTING = 10
 STREAMPRICE_LINK = 'ASK'     # Do you want to track the ASK, BID, LAST
 
-#TOKEN_PATH = '/Users/mattogden/thinkorswim/TradingBOT/tradierAPI/tdameritrade/token'
+# TOKEN_PATH = '/Users/mattogden/thinkorswim/TradingBOT/tradierAPI/tdameritrade/token'
 TOKEN_PATH = 'Z:/thinkorswim/TradingBOT/tradierAPI/tdameritrade/token'
 
 
 ##############################     DISCORD   ####################
-CHANNELID = '123456789123456789'
-DISCORD_AUTH = 'mfa.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+CHANNELID = '123456789'
+DISCORD_AUTH = 'mfa.somethingsomethingsomething'
 DISCORD_USER = 'Flow Bot'
 STRATEGY = 'DISCORD'
 
 # ALERTS #
-DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/XXXXXXXXXXXXXX/XXXXXXXXXXXXXX'
+DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/000000000000000000/aaaaaaabbbbbbbbcccccccc'
 
 
 ########################   TRADIER   ############################
 # REAL TRADING #
-LIVE_ACCESS_TOKEN = 'XXXXXXXXXXXXXXXXXX'
-LIVE_ACCOUNT_NUMBER = '123ABC123'
+LIVE_ACCESS_TOKEN = 'abcabcabc123abc'
+LIVE_ACCOUNT_NUMBER = '123123123'
 
 # PAPER TRADING #
-SANDBOX_ACCESS_TOKEN = 'ZZZZZZZZZZZZZZZZ'
-SANDBOX_ACCOUNT_NUMBER = '456DEF456'
+SANDBOX_ACCESS_TOKEN = 'abcdefghijklmno'
+SANDBOX_ACCOUNT_NUMBER = '456456456'
 
 
