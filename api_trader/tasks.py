@@ -4,6 +4,7 @@ import time
 import config
 import pytz
 import requests
+import traceback
 from tradier import tradier_constants
 from datetime import datetime, timedelta
 from pymongo.errors import WriteError, WriteConcernError
@@ -14,6 +15,7 @@ from discord import discord_helpers
 
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
+TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 RUN_TRADIER = config.RUN_TRADIER
 MAX_QUEUE_LENGTH = config.MAX_QUEUE_LENGTH
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
@@ -40,24 +42,6 @@ class Tasks:
                         'Accept': 'application/json'
                         }
 
-
-    @exception_handler
-    def checkOCOpapertriggers(self):
-
-        for position in self.mongo.open_positions.find({"Trader": self.user["Name"]}):
-
-            symbol = position["Symbol"]
-
-            asset_type = position["Asset_Type"]
-
-            resp = self.tdameritrade.getQuote(
-                symbol if asset_type == "EQUITY" else position["Pre_Symbol"])
-
-            price = float(resp[symbol  if asset_type == "EQUITY" else position["Pre_Symbol"]]["askPrice"])
-
-            if price <= (position["Entry_Price"] * STOP_LOSS_PERCENTAGE) or price >= (position["Entry_Price"] * TAKE_PROFIT_PERCENTAGE):
-                # CLOSE POSITION
-                pass
 
     def getTradierorder(self, id):
 
@@ -291,11 +275,11 @@ class Tasks:
 
                 new_status = spec_order['order']["status"]
 
-                if new_status.upper() == "FILLED":
+                if new_status.upper() == "FILLED" or new_status.upper() == "EXPIRED":
 
                     self.tradiercloseOrder(position, spec_order['order'])
 
-                elif new_status.upper() == "CANCELED" or new_status.upper() == "REJECTED" or new_status.upper() == "EXPIRED":
+                elif new_status.upper() == "CANCELED" or new_status.upper() == "REJECTED":
 
                     other = {
                         "Symbol": position["Symbol"],

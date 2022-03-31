@@ -16,6 +16,7 @@ def leaverunner(trader, open_position):
     if not RUN_LIVE_TRADER:
         trader.buy_order(open_position, trade_signal=None)
 
+
 def tradierExtractOCOChildren(spec_order):
     """This method extracts oco children order ids and then sends it to be stored in mongo open positions.
     Data will be used by checkOCOtriggers with order ids to see if stop loss or take profit has been triggered.
@@ -69,7 +70,7 @@ def streamPrice(trader):
         symbol = open_position['Symbol']
         # strategy = open_position['Strategy']
         asset_type = open_position['Asset_Type']
-        entry_price = open_position['Price']
+        entry_price = open_position['Entry_Price']
         order_type = open_position['Order_Type']
         # option_type = open_position['Option_Type']
         # strike_price = open_position['Strike_Price']

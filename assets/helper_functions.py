@@ -7,7 +7,10 @@ import config
 THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 TIMEZONE = config.TIMEZONE
-
+TURN_ON_TIME = config.TURN_ON_TIME
+SELL_ALL_POSITIONS = config.SELL_ALL_POSITIONS
+TURN_OFF_TRADES = config.TURN_OFF_TRADES
+SHUTDOWN_TIME = config.SHUTDOWN_TIME
 
 def getDatetime():
     """ function obtains the datetime based on timezone using the pytz library.

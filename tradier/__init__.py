@@ -165,6 +165,22 @@ class TradierTrader(tradierOrderBuilder):
 
         return json_response
 
+    @exception_handler
+    def cancelALLorders(self):
+
+        all_orders = self.get_allPositions()['orders']
+
+        for order in all_orders:
+
+            current_status = order['order']['status']
+
+            if current_status == 'pending' or current_status == 'open':
+                self.cancel_order(order['order']['id'])
+
+            else:
+                continue
+
+
     # STEP ONE
     @exception_handler
     def sendOrder(self, trade_data, mongo_trader, strategy_object, direction, special_order_type):
