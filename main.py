@@ -27,6 +27,9 @@ IS_TESTING = config.IS_TESTING
 TRADE_HEDGES = config.TRADE_HEDGES
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 RUN_WEBSOCKET = config.RUN_WEBSOCKET
+TIMEZONE = config.TIMEZONE
+TURN_OFF_TRADES = config.TURN_OFF_TRADES
+SELL_ALL_POSITIONS = config.SELL_ALL_POSITIONS
 
 class Main:
 
@@ -409,7 +412,22 @@ class Main:
             """THIS WILL PUT ALL ALERTS INTO C.OPTIONLIST TO BE TRADED"""
             self.set_alerts(trade_alerts)
 
-            if config.RUN_TA:
+            """CHECK THE TIME"""
+            current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
+            day = datetime.now(pytz.timezone(TIMEZONE)).strftime('%a')
+            weekends = ["Sat", "Sun"]
+
+            if current_time > SELL_ALL_POSITIONS:
+                print("Shutdown time has passed, all positions now CLOSING")
+                self.open_positions = self.mongo.open_positions
+                for open_position in list(self.open_positions.find({})):
+                    self.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
+
+            if current_time > TURN_OFF_TRADES:
+                print(f'It is {TURN_OFF_TRADES}, closing all queued trades')
+                c.OPTIONLIST.clear()
+
+            elif config.RUN_TA:
 
                 """ALL ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA"""
                 for api_trader in self.traders.values():
