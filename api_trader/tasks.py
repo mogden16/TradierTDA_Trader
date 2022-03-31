@@ -187,7 +187,13 @@ class Tasks:
 
             obj["Entry_Date"] = position["Entry_Date"]
 
-            obj["Exit_Price"] = price
+            if "stop_price" in spec_order.keys():
+
+                obj["Exit_Price"] = spec_order['stop_price']
+
+            else:
+
+                obj["Exit_Price"] = spec_order["price"]
 
             obj["Exit_Date"] = getDatetime()
 
