@@ -419,6 +419,7 @@ class Main:
 
             if current_time > SELL_ALL_POSITIONS:
                 print("Shutdown time has passed, all positions now CLOSING")
+                self.tradier.cancelALLorders()
                 open_positions = self.get_mongo_openPositions()
                 for open_position in open_positions:
                     self.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
