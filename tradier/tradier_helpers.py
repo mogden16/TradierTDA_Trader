@@ -2,6 +2,7 @@ import config
 import traceback
 
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
+RUN_TRADIER = config.RUN_TRADIER
 IS_TESTING = config.IS_TESTING
 STREAMPRICE_LINK = config.STREAMPRICE_LINK.upper()
 TAKEPROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
@@ -12,9 +13,7 @@ TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 def leaverunner(trader, open_position):
     print('Running leaverunner')
 
-    trader.buy_order(open_position, trade_signal="BUY", isRunner="TRUE")
-    if not RUN_LIVE_TRADER:
-        trader.buy_order(open_position, trade_signal=None)
+    trader.set_trader(open_position, trade_signal="BUY", isRunner="TRUE")
 
 
 def tradierExtractOCOChildren(spec_order):
@@ -34,14 +33,14 @@ def tradierExtractOCOChildren(spec_order):
             sub_order["Order_ID"] = child['id']
             sub_order["Side"] = child["side"]
             sub_order["Stop_Price"] = child["stop_price"]
-            sub_order["status"] = child["status"]
+            sub_order["Order_Status"] = child["status"]
             orders.append(sub_order)
 
         else:
             sub_order["Order_ID"] = child['id']
             sub_order["Side"] = child["side"]
             sub_order["Takeprofit_Price"] = child['price']
-            sub_order["status"] = child['status']
+            sub_order["Order_Status"] = child['status']
             orders.append(sub_order)
 
     oco_children['childOrderStrategies'] = orders
@@ -61,20 +60,19 @@ def streamPrice(trader):
     elif len(queue) != 0:
         for order in queue:
             pre_symbol = order['Pre_Symbol']
-            price = order['Price']
-            current_price = trader.tradier.get_quote(order)['lastPrice']
-            print(f'Queued Position: {pre_symbol}  order_price: {price}  current_price: {current_price} \n')
+            price = order['Entry_Price']
+            if RUN_TRADIER:
+                current_price = trader.tradier.get_quote(order)['lastPrice']
+            else:
+                current_price = list(trader.traders.values())[0].tdameritrade.getQuote(pre_symbol)[str(pre_symbol)]['lastPrice']
+            print(f'Queued Position: {pre_symbol}  order_price: {price}  last_price: {current_price} \n')
 
     for open_position in open_positions:
         id = open_position['_id']
         symbol = open_position['Symbol']
-        # strategy = open_position['Strategy']
         asset_type = open_position['Asset_Type']
         entry_price = open_position['Entry_Price']
         order_type = open_position['Order_Type']
-        # option_type = open_position['Option_Type']
-        # strike_price = open_position['Strike_Price']
-        # exp_date = open_position['Exp_Date']
         pre_symbol = open_position["Pre_Symbol"]
         isRunner = open_position["isRunner"]
         trail_stop_value = open_position['Trail_Stop_Value']
@@ -107,7 +105,6 @@ def streamPrice(trader):
                     else:
                         continue
 
-
                 else:
                     print('error with STREAMPRICE_LINK in env')
 
@@ -130,20 +127,25 @@ def streamPrice(trader):
 
             elif order_type == "OCO":
 
-                open_position['Takeprofit_Price'] = takeprofit_price
-                open_position['Stoploss_Price'] = stoploss_price
+                if RUN_TRADIER:
+                    takeprofit_price = open_position['childOrderStrategies'][0]['Takeprofit_Price']
+                    stoploss_price = open_position['childOrderStrategies'][1]['Stop_Price']
+
+                else:
+                    takeprofit_price = open_position['childOrderStrategies'][str(0)]['Takeprofit_Price']
+                    stoploss_price = open_position['childOrderStrategies'][str(1)]['Stop_Price']
 
                 if current_price >= takeprofit_price:
                     print('max_price exceeds TakeProfit price, closing position')
-                    # trader.buy_order(open_position, trade_signal="CLOSE")
-                    # if not RUN_LIVE_TRADER:
-                    #     trader.buy_order(open_position, trade_signal=None)
+                    trader.mongo.open_positions.update_one({"_id": id},
+                                                           {"$set": {'childOrderStrategies.0.Order_Status': 'FILLED'}},
+                                                           upsert=True)
 
                 elif current_price <= stoploss_price:
                     print('current_price exceeds StopLoss price, closing position')
-                    # trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
-                    # if not RUN_LIVE_TRADER:
-                    #     trader.buy_order(open_position, trade_signal=None)
+                    trader.mongo.open_positions.update_one({"_id": id},
+                                                           {"$set": {'childOrderStrategies.1.Order_Status': 'FILLED'}},
+                                                           upsert=True)
 
             elif order_type == "TRAIL":
                 max_price = open_position['Max_Price']
@@ -162,10 +164,9 @@ def streamPrice(trader):
 
                 elif current_price < trailstop_price:
                     print('current_price is lower than trailstop price, closing position')
-                    trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                    trader.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
                     if not RUN_LIVE_TRADER:
-                        trader.buy_order(open_position, trade_signal=None)
-
+                        trader.set_trader(open_position, trade_signal=None)
 
             elif order_type == "CUSTOM":
 
@@ -197,126 +198,125 @@ def streamPrice(trader):
 
                     elif current_price < trailstop_price:
                         print('current_price is lower than trailstop price, closing position')
-                        trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                        trader.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
                         if not RUN_LIVE_TRADER:
-                            trader.buy_order(open_position, trade_signal=None)
+                            trader.set_trader(open_position, trade_signal=None)
 
-            #
-            # elif order_type == "CUSTOM2":
-            #
-            #     trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Current_Price': current_price}}, upsert=True)
-            #     max_price = open_position['Max_Price']
-            #     trailstop_price = round(max_price - trail_stop_value, 2)
-            #
-            #     if isRunner == "FALSE":
-            #
-            #         open_position['Takeprofit_Price'] = takeprofit_price
-            #         open_position['Stoploss_Price'] = stoploss_price
-            #
-            #         if current_price >= takeprofit_price:
-            #             print('max_price exceeds TakeProfit price, closing position')
-            #             trader.buy_order(open_position, trade_signal="CLOSE")
-            #             if not RUN_LIVE_TRADER:
-            #                 trader.buy_order(open_position, trade_signal=None)
-            #             leaverunner(trader, open_position)
-            #
-            #         elif current_price <= stoploss_price:
-            #             print('current_price exceeds StopLoss price, closing position')
-            #             trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
-            #             if not RUN_LIVE_TRADER:
-            #                 trader.buy_order(open_position, trade_signal=None)
-            #
-            #     elif isRunner == "TRUE":
-            #         target_price = None
-            #         limits = {
-            #             'target1': round(entry_price * (1 + .05), 2),
-            #             'target2': round(entry_price * (1 + .10), 2),
-            #             'target3': round(entry_price * (1 + .20), 2),
-            #             'target4': round(entry_price * (1 + .30), 2),
-            #             'target5': round(entry_price * (1 + .50), 2),
-            #             'target6': round(entry_price * (1 + .70), 2),
-            #             'stop1': round(entry_price * (1 - .10), 2),
-            #             'stop2': round(entry_price * (1 + 0), 2),
-            #             'stop3': round(entry_price * (1 + .10), 2),
-            #             'stop4': round(entry_price * (1 + .20), 2),
-            #             'stop5': round(entry_price * (1 + .30), 2),
-            #             'stop6': round(entry_price * (1 + .50), 2)
-            #         }
-            #
-            #         if current_price > max_price:
-            #             open_position['Max_Price'] = current_price
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'Max_Price': current_price}},
-            #                                            upsert=False)
-            #
-            #         if max_price < limits['target1']:
-            #             target_price = limits['target1']
-            #             stoploss_price = limits['stop1']
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-            #                                            upsert=True)
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-            #                                            upsert=True)
-            #
-            #         elif max_price >= limits['target1'] and max_price < limits['target2']:
-            #             target_price = limits['target2']
-            #             stoploss_price = limits['stop2']
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-            #                                            upsert=True)
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-            #                                            upsert=True)
-            #
-            #         elif max_price >= limits['target2'] and max_price < limits['target3']:
-            #             target_price = limits['target3']
-            #             stoploss_price = limits['stop3']
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-            #                                            upsert=True)
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-            #                                            upsert=True)
-            #
-            #         elif max_price >= limits['target3'] and max_price < limits['target4']:
-            #             target_price = limits['target4']
-            #             stoploss_price = limits['stop4']
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-            #                                            upsert=True)
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-            #                                            upsert=True)
-            #
-            #         elif max_price >= limits['target4'] and max_price < limits['target5']:
-            #             target_price = limits['target5']
-            #             stoploss_price = limits['stop5']
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-            #                                            upsert=True)
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-            #                                            upsert=True)
-            #
-            #         elif max_price >= limits['target5'] and max_price < limits['target6']:
-            #             target_price = limits['target6']
-            #             stoploss_price = limits['stop6']
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-            #                                            upsert=True)
-            #             trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-            #                                            upsert=True)
-            #
-            #         elif max_price >= limits['target6']:
-            #             trailstop_price = round(max_price - trail_stop_value, 2)
-            #
-            #             if current_price < trailstop_price:
-            #                 print('current_price is lower than trailstop price, closing position')
-            #                 trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
-            #                 if not RUN_LIVE_TRADER:
-            #                     trader.buy_order(open_position, trade_signal=None)
-            #
-            #         else:
-            #             print('error with streaming positions')
-            #
-            #         if current_price < stoploss_price:
-            #             trader.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
-            #             if not RUN_LIVE_TRADER:
-            #                 trader.buy_order(open_position, trade_signal=None)
-            #
-            #         print(
-            #             f'{pre_symbol}   TARGETPrice {target_price}   currentPrice {current_price}   '
-            #             f'entryPrice {entry_price}   stoplossPrice{stoploss_price}   '
-            #             f'trailPrice {trailstop_price} \n')
+            elif order_type == "CUSTOM2":
+
+                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Current_Price': current_price}}, upsert=True)
+                max_price = open_position['Max_Price']
+                trailstop_price = round(max_price - trail_stop_value, 2)
+
+                if isRunner == "FALSE":
+
+                    open_position['Takeprofit_Price'] = takeprofit_price
+                    open_position['Stoploss_Price'] = stoploss_price
+
+                    if current_price >= takeprofit_price:
+                        print('max_price exceeds TakeProfit price, closing position')
+                        trader.set_trader(open_position, trade_signal="CLOSE")
+                        if not RUN_LIVE_TRADER:
+                            trader.set_trader(open_position, trade_signal=None)
+                        leaverunner(trader, open_position)
+
+                    elif current_price <= stoploss_price:
+                        print('current_price exceeds StopLoss price, closing position')
+                        trader.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                        if not RUN_LIVE_TRADER:
+                            trader.set_trader(open_position, trade_signal=None)
+
+                elif isRunner == "TRUE":
+                    target_price = None
+                    limits = {
+                        'target1': round(entry_price * (1 + .05), 2),
+                        'target2': round(entry_price * (1 + .10), 2),
+                        'target3': round(entry_price * (1 + .20), 2),
+                        'target4': round(entry_price * (1 + .30), 2),
+                        'target5': round(entry_price * (1 + .50), 2),
+                        'target6': round(entry_price * (1 + .70), 2),
+                        'stop1': round(entry_price * (1 - .10), 2),
+                        'stop2': round(entry_price * (1 + 0), 2),
+                        'stop3': round(entry_price * (1 + .10), 2),
+                        'stop4': round(entry_price * (1 + .20), 2),
+                        'stop5': round(entry_price * (1 + .30), 2),
+                        'stop6': round(entry_price * (1 + .50), 2)
+                    }
+
+                    if current_price > max_price:
+                        open_position['Max_Price'] = current_price
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'Max_Price': current_price}},
+                                                       upsert=False)
+
+                    if max_price < limits['target1']:
+                        target_price = limits['target1']
+                        stoploss_price = limits['stop1']
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                       upsert=True)
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
+                                                       upsert=True)
+
+                    elif max_price >= limits['target1'] and max_price < limits['target2']:
+                        target_price = limits['target2']
+                        stoploss_price = limits['stop2']
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                       upsert=True)
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
+                                                       upsert=True)
+
+                    elif max_price >= limits['target2'] and max_price < limits['target3']:
+                        target_price = limits['target3']
+                        stoploss_price = limits['stop3']
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                       upsert=True)
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
+                                                       upsert=True)
+
+                    elif max_price >= limits['target3'] and max_price < limits['target4']:
+                        target_price = limits['target4']
+                        stoploss_price = limits['stop4']
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                       upsert=True)
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
+                                                       upsert=True)
+
+                    elif max_price >= limits['target4'] and max_price < limits['target5']:
+                        target_price = limits['target5']
+                        stoploss_price = limits['stop5']
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                       upsert=True)
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
+                                                       upsert=True)
+
+                    elif max_price >= limits['target5'] and max_price < limits['target6']:
+                        target_price = limits['target6']
+                        stoploss_price = limits['stop6']
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                       upsert=True)
+                        trader.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
+                                                       upsert=True)
+
+                    elif max_price >= limits['target6']:
+                        trailstop_price = round(max_price - trail_stop_value, 2)
+
+                        if current_price < trailstop_price:
+                            print('current_price is lower than trailstop price, closing position')
+                            trader.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                            if not RUN_LIVE_TRADER:
+                                trader.set_trader(open_position, trade_signal=None)
+
+                    else:
+                        print('error with streaming positions')
+
+                    if current_price < stoploss_price:
+                        trader.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                        if not RUN_LIVE_TRADER:
+                            trader.set_trader(open_position, trade_signal=None)
+
+                    print(
+                        f'{pre_symbol}   TARGETPrice {target_price}   currentPrice {current_price}   '
+                        f'entryPrice {entry_price}   stoplossPrice{stoploss_price}   '
+                        f'trailPrice {trailstop_price} \n')
 
         if order_type == "OCO":
             if current_price > entry_price:

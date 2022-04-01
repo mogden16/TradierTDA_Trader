@@ -49,7 +49,7 @@ class MongoDB:
 
                 self.analysis = self.db["analysis"]
 
-                self.forbiggen = self.db["forbidden"]
+                self.forbidden = self.db["forbidden"]
 
                 self.alert_history = self.db["alert_history"]
 

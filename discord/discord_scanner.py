@@ -77,6 +77,8 @@ def discord_messages(start_time):
                     option_type = statement[4].upper()
                     if option_type[-1] == "S":
                         option_type = option_type.rstrip(option_type[-1])
+                    if option_type[0] == "$":
+                        option_type = option_type.rstrip(option_type[0])
                     option_type_short = option_type[0]
                     timestamp = value['timestamp']
                     trade_symbol = f'{symbol}_{exp_month}{exp_day}22{option_type_short}{min_strike}'

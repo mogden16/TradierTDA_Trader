@@ -366,7 +366,7 @@ class Main:
 
 
     @exception_handler
-    def buy_order(self, value, trade_signal, trade_type="LIMIT", **kwargs):
+    def set_trader(self, value, trade_signal, trade_type="LIMIT", **kwargs):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
         """
         isRunner = kwargs.get('isRunner', False)
@@ -378,12 +378,10 @@ class Main:
             for api_trader in self.traders.values():
                 api_trader.updateStatus()
                 temp_trade_data=self.get_tradeFormat(api_trader, value, trade_signal, trade_type, "TRUE" if isRunner else "FALSE")
-                for trade_data_row in temp_trade_data:
-                    trade_data=[]
-                    trade_data.append(trade_data_row)
+                for trade_data in temp_trade_data:
                     api_trader.runTrader(trade_data)
-                    if not RUN_LIVE_TRADER:
-                        api_trader.runTrader(trade_data=None)
+                    # if not RUN_LIVE_TRADER:
+                    #     api_trader.runTrader(trade_data=None)
 
         else:
 
@@ -422,7 +420,7 @@ class Main:
                 self.tradier.cancelALLorders()
                 open_positions = self.get_mongo_openPositions()
                 for open_position in open_positions:
-                    self.buy_order(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                    self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
 
             if current_time > TURN_OFF_TRADES:
                 print(f'It is {TURN_OFF_TRADES}, closing all queued trades')
@@ -440,13 +438,13 @@ class Main:
 
                         """IF BUY SIGNAL == TRUE THEN BUY!"""
                         if buy_signal:
-                            self.buy_order(value, trade_signal="BUY", trade_type="LIMIT")
+                            self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
                             c.DONTTRADELIST.append(value)
 
             else:
                 buy_signal = True
                 for value in c.OPTIONLIST:
-                    self.buy_order(value, trade_signal="BUY", trade_type="LIMIT")
+                    self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
                     c.DONTTRADELIST.append(value)
 
             """  CLEAN UP OUR OLD ORDERS  """

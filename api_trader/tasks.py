@@ -19,6 +19,7 @@ TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 RUN_TRADIER = config.RUN_TRADIER
 MAX_QUEUE_LENGTH = config.MAX_QUEUE_LENGTH
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
+SELL_PRICE = config.SELL_PRICE
 
 class Tasks:
 
@@ -34,7 +35,8 @@ class Tasks:
         self.endpoint = tradier_constants.API_ENDPOINT['brokerage'] if RUN_LIVE_TRADER \
             else tradier_constants.API_ENDPOINT['brokerage_sandbox']
 
-        self.account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
+        # if RUN_TRADIER:
+        #     self.account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
 
         self.tradier_token = config.LIVE_ACCESS_TOKEN if RUN_LIVE_TRADER else config.SANDBOX_ACCESS_TOKEN
 
@@ -187,13 +189,7 @@ class Tasks:
 
             obj["Entry_Date"] = position["Entry_Date"]
 
-            if "stop_price" in spec_order.keys():
-
-                obj["Exit_Price"] = spec_order['stop_price']
-
-            else:
-
-                obj["Exit_Price"] = spec_order["price"]
+            obj["Exit_Price"] = spec_order['avg_fill_price']
 
             obj["Exit_Date"] = getDatetime()
 
@@ -272,41 +268,80 @@ class Tasks:
             childOrderStrategies = position["childOrderStrategies"]
 
             x = 0
+            trulycanceled = 0
             for order in childOrderStrategies:
 
-                spec_order = self.tdameritrade.getSpecificOrder(order['Order_ID'])
+                if RUN_LIVE_TRADER:
 
-                if 'error' in spec_order.keys():
+                    spec_order = self.tdameritrade.getSpecificOrder(order['Order_ID'])
+
+                    new_status = spec_order['order']["status"]
+
+                elif RUN_TRADIER:
+
                     spec_order = self.getTradierorder(order['Order_ID'])
 
-                new_status = spec_order['order']["status"]
+                    new_status = spec_order['order']["status"]
+
+                else:
+
+                    new_status = position['childOrderStrategies'][order]["Order_Status"]
 
                 if new_status.upper() == "FILLED" or new_status.upper() == "EXPIRED":
 
-                    self.tradiercloseOrder(position, spec_order['order'])
+                    if RUN_TRADIER:
+
+                        self.tradiercloseOrder(position, spec_order['order'])
+
+                    else:
+
+                        if position['childOrderStrategies'][str(order)]['Exit_Type'] == "STOP LOSS":
+
+                            price = self.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']]['bidPrice']
+
+                        else:
+
+                            price = self.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']][SELL_PRICE]
+
+                        spec_order = {
+                            'price': price
+                        }
+
+                        position["Side"] = "SELL_TO_CLOSE"
+
+                        position["Direction"] = "CLOSE POSITION"
+
+                        self.pushOrder(position, spec_order)
 
                 elif new_status.upper() == "CANCELED" or new_status.upper() == "REJECTED":
 
-                    other = {
-                        "Symbol": position["Symbol"],
-                        "Order_Type": position["Order_Type"],
-                        "Order_Status": new_status,
-                        "Strategy": position["Strategy"],
-                        "Trader": self.user["Name"],
-                        "Date": getDatetime(),
-                        "Account_ID": self.account_id
-                    }
+                    trulycanceled += 1
 
-                    self.rejected.insert_one(
-                        other) if new_status == "REJECTED" else self.canceled.insert_one(other)
+                    if trulycanceled == 2:
 
-                    self.logger.info(
-                        f"{new_status.upper()} ORDER For {position['Symbol']} - TRADER: {self.user['Name']} - ACCOUNT ID: {modifiedAccountID(self.account_id)}")
+                        other = {
+                            "Symbol": position["Symbol"],
+                            "Order_Type": position["Order_Type"],
+                            "Order_Status": new_status,
+                            "Strategy": position["Strategy"],
+                            "Trader": self.user["Name"],
+                            "Date": getDatetime(),
+                            "Account_ID": self.account_id
+                        }
+                        self.rejected.insert_one(
+                            other) if new_status == "REJECTED" else self.canceled.insert_one(other)
+
+                        self.logger.info(
+                            f"{new_status.upper()} ORDER For {position['Symbol']} - TRADER: {self.user['Name']} - ACCOUNT ID: {modifiedAccountID(self.account_id)}")
+
+                    else:
+
+                        continue
 
                 else:
 
                     self.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"], "Strategy": position["Strategy"]},
-                        {"$set": {f"childOrderStrategies.{x}.status": new_status}})
+                        {"$set": {f"childOrderStrategies.{x}.Order_Status": new_status}})
 
                 x += 1
 
@@ -321,16 +356,36 @@ class Tasks:
             "childOrderStrategies": {}
         }
 
-        childOrderStrategies = spec_order["childOrderStrategies"][0]["childOrderStrategies"]
+        if RUN_LIVE_TRADER:
 
-        for child in childOrderStrategies:
+            childOrderStrategies = spec_order["childOrderStrategies"][0]["childOrderStrategies"]
 
-            oco_children["childOrderStrategies"][child["orderId"]] = {
-                "Side": child["orderLegCollection"][0]["instruction"],
-                "Exit_Price": child["stopPrice"] if "stopPrice" in child else child["price"],
-                "Exit_Type": "STOP LOSS" if "stopPrice" in child else "TAKE PROFIT",
-                "Order_Status": child["status"]
-            }
+            for child in childOrderStrategies:
+
+                oco_children["childOrderStrategies"][child["orderId"]] = {
+                    "Side": child["orderLegCollection"][0]["instruction"],
+                    "Exit_Price": child["stopPrice"] if "stopPrice" in child else child["price"],
+                    "Exit_Type": "STOP LOSS" if "stopPrice" in child else "TAKE PROFIT",
+                    "Order_Status": child["status"]
+                }
+
+        else:
+
+            for i in range(0, 2):
+
+                oco_children['childOrderStrategies'][str(i)] = {
+                    "Side": "sell_to_close",
+                    "Order_Status": "open",
+                    "Exit_Type": "TAKE PROFIT" if i == 0 else "STOP LOSS"
+                }
+
+                if i == 0:
+                    oco_children['childOrderStrategies'][str(i)]['Takeprofit_Price'] = \
+                        round(spec_order["price"] * (1+TAKE_PROFIT_PERCENTAGE), 2)
+
+                else:
+                    oco_children['childOrderStrategies'][str(i)]['Stop_Price'] = \
+                        round(spec_order["price"] * (1-STOP_LOSS_PERCENTAGE), 2)
 
         return oco_children
 
@@ -353,11 +408,7 @@ class Tasks:
 
         # IF STRATEGY NOT IN STRATEGIES COLLECTION IN MONGO, THEN ADD IT
 
-        self.strategies.update(
-            {"Strategy": strategy},
-            {"$setOnInsert": obj},
-            upsert=True
-        )
+        self.strategies.update_one({"Strategy": strategy},{"$set": obj}, upsert=True)
 
     @exception_handler
     def killQueueOrder(self):
@@ -393,32 +444,55 @@ class Tasks:
                 if RUN_TRADIER:
                     resp = self.cancelTradierorder(id)
 
+                    if 'ok' in resp['order']['status']:
+                        other = {
+                            "Symbol": order["Symbol"],
+                            "Pre_Symbol": order["Pre_Symbol"],
+                            "Order_Type": order["Order_Type"],
+                            "Order_Status": "CANCELED",
+                            "Strategy": order["Strategy"],
+                            "Account_ID": self.account_id,
+                            "Trader": self.user["Name"],
+                            "Date": getDatetime()
+                        }
+
+                        self.canceled.insert_one(other)
+
+                        self.queue.delete_one(
+                            {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]})
+
+                        self.logger.info(
+                            f"CANCELED ORDER FOR {order['Symbol']} - TRADER: {self.user['Name']}", extra={'log': True})
+
+                        discord_alert = f"TradingBOT just cancelled order for: {pre_symbol}"
+                        discord_helpers.send_discord_alert(discord_alert)
+
                 else:
                     resp = self.tdameritrade.cancelOrder(id)
 
-                if 'ok' in resp['order']['status'] or resp.status_code == 200 or resp.status_code == 201:
+                    if resp.status_code == 200 or resp.status_code == 201:
 
-                    other = {
-                        "Symbol": order["Symbol"],
-                        "Pre_Symbol": order["Pre_Symbol"],
-                        "Order_Type": order["Order_Type"],
-                        "Order_Status": "CANCELED",
-                        "Strategy": order["Strategy"],
-                        "Account_ID": self.account_id,
-                        "Trader": self.user["Name"],
-                        "Date": getDatetime()
-                    }
+                        other = {
+                            "Symbol": order["Symbol"],
+                            "Pre_Symbol": order["Pre_Symbol"],
+                            "Order_Type": order["Order_Type"],
+                            "Order_Status": "CANCELED",
+                            "Strategy": order["Strategy"],
+                            "Account_ID": self.account_id,
+                            "Trader": self.user["Name"],
+                            "Date": getDatetime()
+                        }
 
-                    self.canceled.insert_one(other)
+                        self.canceled.insert_one(other)
 
-                    self.queue.delete_one(
-                        {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]})
+                        self.queue.delete_one(
+                            {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]})
 
-                    self.logger.info(
-                        f"CANCELED ORDER FOR {order['Symbol']} - TRADER: {self.user['Name']}", extra={'log': True})
+                        self.logger.info(
+                            f"CANCELED ORDER FOR {order['Symbol']} - TRADER: {self.user['Name']}", extra={'log': True})
 
-                    discord_alert = f"TradingBOT just cancelled order for: {pre_symbol}"
-                    discord_helpers.send_discord_alert(discord_alert)
+                        discord_alert = f"TradingBOT just cancelled order for: {pre_symbol}"
+                        discord_helpers.send_discord_alert(discord_alert)
 
     def runTasks(self):
         """ METHOD RUNS TASKS ON WHILE LOOP EVERY 5 - 60 SECONDS DEPENDING.

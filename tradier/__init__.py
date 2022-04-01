@@ -12,6 +12,7 @@ from tradier.tradier_helpers import tradierExtractOCOChildren
 from discord import discord_helpers
 
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
+RUN_TRADIER = config.RUN_TRADIER
 RUN_WEBSOCKET = config.RUN_WEBSOCKET
 TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 IS_TESTING = config.IS_TESTING
@@ -28,7 +29,13 @@ class TradierTrader(tradierOrderBuilder):
 
         self.logger = logger
 
-        self.account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
+        if RUN_TRADIER:
+
+            self.account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
+
+        else:
+
+            self.account_id = config.ACCOUNT_ID
 
         self.tradier_token = config.LIVE_ACCESS_TOKEN if RUN_LIVE_TRADER else config.SANDBOX_ACCESS_TOKEN
 
@@ -250,6 +257,9 @@ class TradierTrader(tradierOrderBuilder):
         resp, status_code = self.place_order(order)
 
         if 'errors' in resp.keys() or 'error' in resp.keys():
+            message = f'error in order for {pre_symbol}: {resp["errors"]["error"]}'
+            print(message)
+            discord_helpers.send_discord_alert(message)
             return
 
         resp = resp['order']
@@ -522,7 +532,7 @@ class TradierTrader(tradierOrderBuilder):
 
             obj["Qty"] = position["Qty"]
 
-            obj["Entry_Price"] = position["Price"]
+            obj["Entry_Price"] = position["Entry_Price"]
 
             obj["Entry_Date"] = position["Entry_Date"]
 
@@ -631,7 +641,7 @@ class TradierTrader(tradierOrderBuilder):
 
             print('issue with strategy_object, see tradier --> __init__.py')
 
-            strategy_object = self.strategies.find_one(
+            strategy_object = self.mongo.strategies.find_one(
                 {"Account_ID": self.account_id, "Strategy": strategy})
 
         position_type = strategy_object["Position_Type"]

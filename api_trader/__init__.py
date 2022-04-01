@@ -16,9 +16,13 @@ from discord import discord_helpers
 
 THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
-RUN_TASKS = True if config.RUN_TASKS else False
-RUN_WEBSOCKET = True if config.RUN_WEBSOCKET else False
-RUN_LIVE_TRADER = True if config.RUN_LIVE_TRADER else False
+RUN_TASKS = config.RUN_TASKS
+RUN_WEBSOCKET = config.RUN_WEBSOCKET
+RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
+RUN_TRADIER = config.RUN_TRADIER
+TRAIL_STOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
+TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
+STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
 
 class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
@@ -33,14 +37,25 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
             asset_type ([str]): [ACCOUNT ASSET TYPE (EQUITY, OPTIONS)]
         """
 
-        self.RUN_LIVE_TRADER = str(user["Accounts"][str(
-            account_id)]["Account_Position"]).upper() == "LIVE"
+        if RUN_LIVE_TRADER:
+
+            self.RUN_LIVE_TRADER = "LIVE"
+
+        else:
+
+            self.RUN_LIVE_TRADER = "PAPER"
 
         self.tdameritrade = tdameritrade
 
         self.mongo = mongo
 
-        self.account_id = account_id
+        if RUN_TRADIER:
+
+            self.account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
+
+        else:
+
+            self.account_id = config.ACCOUNT_ID
 
         self.user = user
 
@@ -93,6 +108,8 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
     def sendOrder(self, trade_data, strategy_object, direction):
 
         symbol = trade_data["Symbol"]
+        
+        pre_symbol = trade_data["Pre_Symbol"]
 
         strategy = trade_data["Strategy"]
 
@@ -102,18 +119,12 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
         if RUN_LIVE_TRADER:
 
-            if RUN_WEBSOCKET:
+            if order_type not in ['OCO', 'TRAIL']:
 
                 order, obj = self.standardOrder(
                     trade_data, strategy_object, direction)
 
-                disclosure = f'\n You have RUN_LIVE_TRADER: {RUN_LIVE_TRADER} & ' \
-                      f'RUN_WEBSOCKET: {RUN_WEBSOCKET} \n' \
-                      f'IF YOUR PROGRAM STOPS, YOUR ORDERS WONT EXIT'
-                print(disclosure)
-                discord_helpers.send_discord_alert(disclosure)
-
-            elif not RUN_WEBSOCKET:
+            else:
 
                 if order_type == "OCO":
 
@@ -140,7 +151,7 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
             return
 
         # PLACE ORDER IF LIVE TRADER ################################################
-        if self.RUN_LIVE_TRADER:
+        if RUN_LIVE_TRADER:
 
             resp = self.tdameritrade.placeTDAOrder(order)
 
@@ -173,7 +184,7 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
         else:
 
-            obj["Order_ID"] = -1*randint(100_000_000, 999_999_999)
+            obj["Order_ID"] = -1 * randint(100_000_000, 999_999_999)
 
             obj["Account_Position"] = "Paper"
 
@@ -185,11 +196,11 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
         self.queueOrder(obj)
 
-        response_msg = f"{'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}: {side} Order for Symbol {symbol} ({modifiedAccountID(self.account_id)})"
+        response_msg = f"{'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}: {side} Order for Symbol {symbol} ({modifiedAccountID(self.account_id)})"
 
         self.logger.info(response_msg)
 
-        discord_queue_message_to_push = {"content": f":eyes: TradingBOT just Queued \n Side: {side} \n Symbol: {pre_symbol} \n :eyes: Account Position: {'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}"}
+        discord_queue_message_to_push = f":eyes: TradingBOT just Queued \n Side: {side} \n Symbol: {pre_symbol} \n :eyes: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
         discord_helpers.send_discord_alert(discord_queue_message_to_push)
 
     # STEP TWO
@@ -203,6 +214,8 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
         # ADD TO QUEUE WITHOUT ORDER ID AND STATUS
         self.queue.update_one(
             {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]}, {"$set": order}, upsert=True)
+
+        self.updateStatus()
 
     # STEP THREE
     @exception_handler
@@ -218,8 +231,7 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
             IF ORDER ID NOT FOUND, THEN ASSUME ORDER FILLED AND MARK AS ASSUMED DATA. ELSE MARK AS RELIABLE DATA.
         """
 
-        queued_orders = self.queue.find({"Trader": self.user["Name"], "Order_ID": {
-                                        "$ne": None}, "Account_ID": self.account_id})
+        queued_orders = list(self.queue.find({"Trader": self.user["Name"], "Account_ID": self.account_id}))
 
         for queue_order in queued_orders:
 
@@ -235,7 +247,7 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
                 }
 
                 # IF RUNNING LIVE TRADER, THEN ASSUME DATA
-                if self.RUN_LIVE_TRADER:
+                if RUN_LIVE_TRADER:
 
                     data_integrity = "Assumed"
 
@@ -248,6 +260,10 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
                     self.logger.info(
                         f"Paper Trader - Sending Queue Order To PushOrder ({modifiedAccountID(self.account_id)})")
+
+                if queue_order["Order_Type"] == "OCO":
+
+                    queue_order = {**queue_order, **self.extractOCOchildren(custom)}
 
                 self.pushOrder(queue_order, custom, data_integrity)
 
@@ -323,7 +339,6 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
             shares = int(queue_order["Qty"])
 
-
         strategy = queue_order["Strategy"]
 
         side = queue_order["Side"]
@@ -340,7 +355,7 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
         else:
 
-            price = round(price, 2) if price >= 1 else round (price, 4)
+            price = round(price, 2) if price >= 1 else round(price, 4)
 
         position_type = queue_order["Position_Type"]
 
@@ -397,7 +412,7 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
             obj["Max_Price"] = price
 
-            obj["Trail_Stop_Value"] = price * float(os.getenv('TRAIL_STOP_PERCENTAGE'))
+            obj["Trail_Stop_Value"] = price * TRAIL_STOP_PERCENTAGE
 
             collection_insert = self.open_positions.insert_one
 
@@ -406,7 +421,15 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
                                       f"Qty: {shares} \n Price: ${price} \n " \
                                       f"Strategy: {strategy} \n Asset Type: {asset_type} \n " \
                                       f"Date: {getDatetime()} \n " \
-                                      f":rocket: Account Position: {'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}"
+                                      f":rocket: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
+
+            try:
+
+                obj['childOrderStrategies'] = queue_order['childOrderStrategies']
+
+            except:
+
+                pass
 
         elif direction == "CLOSE POSITION":
 
@@ -438,7 +461,7 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
                                       f"Exit Price: ${price} \n Exit Date: {getDatetime()} \n " \
                                       f"Strategy: {strategy} \n Asset Type: {asset_type} \n " \
                                       f":closed_book: Account Position: " \
-                                      f"{'Live Trade' if self.RUN_LIVE_TRADER else 'Paper Trade'}"
+                                      f"{'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
 
             # REMOVE FROM OPEN POSITIONS
             is_removed = self.open_positions.delete_one(
@@ -512,99 +535,99 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
         # FORBIDDEN SYMBOLS
         forbidden_symbols = self.mongo.forbidden.find({"Account_ID": str(self.account_id)})
 
-        for row in trade_data:
+        row = trade_data
 
-            strategy = row["Strategy"]
+        strategy = row["Strategy"]
 
-            symbol = row["Symbol"]
+        symbol = row["Symbol"]
 
-            asset_type = row["Asset_Type"]
+        asset_type = row["Asset_Type"]
 
-            side = row["Side"]
+        side = row["Side"]
 
-            # CHECK OPEN POSITIONS AND QUEUE
-            open_position = self.open_positions.find_one(
-                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
+        # CHECK OPEN POSITIONS AND QUEUE
+        open_position = self.open_positions.find_one(
+            {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
 
-            queued = self.queue.find_one(
-                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
+        queued = self.queue.find_one(
+            {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
+
+        strategy_object = self.strategies.find_one(
+            {"Strategy": strategy, "Account_ID": self.account_id})
+
+        if not strategy_object:
+
+            self.addNewStrategy(strategy, asset_type)
 
             strategy_object = self.strategies.find_one(
-                {"Strategy": strategy, "Account_ID": self.account_id})
+                {"Account_ID": self.account_id, "Strategy": strategy})
 
-            if not strategy_object:
+        position_type = strategy_object["Position_Type"]
 
-                self.addNewStrategy(strategy, asset_type)
+        row["Position_Type"] = position_type
 
-                strategy_object = self.strategies.find_one(
-                    {"Account_ID": self.account_id, "Strategy": strategy})
+        if not queued:
 
-            position_type = strategy_object["Position_Type"]
+            direction = None
 
-            row["Position_Type"] = position_type
+            # IS THERE AN OPEN POSITION ALREADY IN MONGO FOR THIS SYMBOL/STRATEGY COMBO
+            if open_position:
 
-            if not queued:
+                direction = "CLOSE POSITION"
 
-                direction = None
+                # NEED TO COVER SHORT
+                if side == "BUY" and position_type == "SHORT":
 
-                # IS THERE AN OPEN POSITION ALREADY IN MONGO FOR THIS SYMBOL/STRATEGY COMBO
-                if open_position:
+                    pass
 
-                    direction = "CLOSE POSITION"
+                # NEED TO SELL LONG
+                elif side == "SELL" and position_type == "LONG":
 
-                    # NEED TO COVER SHORT
-                    if side == "BUY" and position_type == "SHORT":
+                    pass
 
-                        pass
+                # NEED TO SELL LONG OPTION
+                elif side == "SELL_TO_CLOSE" and position_type == "LONG":
 
-                    # NEED TO SELL LONG
-                    elif side == "SELL" and position_type == "LONG":
+                    pass
 
-                        pass
+                # NEED TO COVER SHORT OPTION
+                elif side == "BUY_TO_CLOSE" and position_type == "SHORT":
 
-                    # NEED TO SELL LONG OPTION
-                    elif side == "SELL_TO_CLOSE" and position_type == "LONG":
+                    pass
 
-                        pass
+                else:
 
-                    # NEED TO COVER SHORT OPTION
-                    elif side == "BUY_TO_CLOSE" and position_type == "SHORT":
+                    pass
 
-                        pass
+            elif not open_position and symbol not in forbidden_symbols:
 
-                    else:
+                direction = "OPEN POSITION"
 
-                        continue
+                # NEED TO GO LONG
+                if side == "BUY" and position_type == "LONG":
 
-                elif not open_position and symbol not in forbidden_symbols:
+                    pass
 
-                    direction = "OPEN POSITION"
+                # NEED TO GO SHORT
+                elif side == "SELL" and position_type == "SHORT":
 
-                    # NEED TO GO LONG
-                    if side == "BUY" and position_type == "LONG":
+                    pass
 
-                        pass
+                # NEED TO GO SHORT OPTION
+                elif side == "SELL_TO_OPEN" and position_type == "SHORT":
 
-                    # NEED TO GO SHORT
-                    elif side == "SELL" and position_type == "SHORT":
+                    pass
 
-                        pass
+                # NEED TO GO LONG OPTION
+                elif side == "BUY_TO_OPEN" and position_type == "LONG":
 
-                    # NEED TO GO SHORT OPTION
-                    elif side == "SELL_TO_OPEN" and position_type == "SHORT":
+                    pass
 
-                        pass
+                else:
 
-                    # NEED TO GO LONG OPTION
-                    elif side == "BUY_TO_OPEN" and position_type == "LONG":
+                    pass
 
-                        pass
+            if direction != None:
 
-                    else:
-
-                        continue
-
-                if direction != None:
-
-                    self.sendOrder(row if not open_position else {
-                                   **row, **open_position}, strategy_object, direction)
+                self.sendOrder(row if not open_position else {
+                               **row, **open_position}, strategy_object, direction)

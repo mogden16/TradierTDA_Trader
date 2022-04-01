@@ -266,7 +266,7 @@ class tradierOrderBuilder:
         self.obj['Exp_Date'] = trade_data['Exp_Date']
         self.obj['Option_Type'] = trade_data['Option_Type']
         self.obj['isRunner'] = trade_data['isRunner']
-        self.obj['Price'] = float(price)
+        self.obj['Entry_Price'] = float(price)
         self.obj['Qty'] = float(qty)
         self.obj['Position_Size'] = float(position_size)
         self.obj['Trader'] = self.user['Name']

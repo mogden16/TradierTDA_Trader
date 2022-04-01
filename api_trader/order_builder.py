@@ -146,8 +146,7 @@ class OrderBuilder:
 
             price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
 
-        self.order["price"] = round(
-            price, 2) if price >= 1 else round(price, 4)
+        self.order["price"] = round(price, 2) if price >= 1 else round(price, 4)
 
         # IF OPENING A POSITION
         if direction == "OPEN POSITION":
@@ -157,7 +156,7 @@ class OrderBuilder:
             shares = int(
                 position_size/price) if asset_type == "EQUITY" else int((position_size / 100)/price)
 
-            if strategy_object["Active"] and shares > 0:
+            if shares > 0:
 
                 self.order["orderType"] = "LIMIT"
 
@@ -215,6 +214,14 @@ class OrderBuilder:
 
         side = trade_data["Side"]
 
+        take_profit_price = round(order["price"] * TAKE_PROFIT_PERCENTAGE, 2) \
+            if order["price"] * TAKE_PROFIT_PERCENTAGE >= 1 \
+            else round(order["price"] * TAKE_PROFIT_PERCENTAGE, 4)
+
+        stop_price = round(order["price"] * STOP_LOSS_PERCENTAGE, 2) \
+            if order["price"] * STOP_LOSS_PERCENTAGE >= 1 \
+            else round(order["price"] * STOP_LOSS_PERCENTAGE, 4)
+
         # GET THE INVERSE OF THE SIDE
         #####################################
         if side == "BUY_TO_OPEN":
@@ -245,8 +252,7 @@ class OrderBuilder:
                         "session": "NORMAL",
                         "duration": "GOOD_TILL_CANCEL",
                         "orderType": "LIMIT",
-                        "price": round(
-                            order["price"] * TAKE_PROFIT_PERCENTAGE, 2) if order["price"] * TAKE_PROFIT_PERCENTAGE >= 1 else round(order["price"] * TAKE_PROFIT_PERCENTAGE, 4),
+                        "price": take_profit_price,
                         "orderLegCollection": [
                             {
                                 "instruction": instruction,
@@ -263,7 +269,7 @@ class OrderBuilder:
                         "session": "NORMAL",
                         "duration": "GOOD_TILL_CANCEL",
                         "orderType": "STOP",
-                        "stopPrice": round(order["price"] * STOP_LOSS_PERCENTAGE, 2) if order["price"] * STOP_LOSS_PERCENTAGE >= 1 else round(order["price"] * STOP_LOSS_PERCENTAGE, 4),
+                        "stopPrice": stop_price,
                         "orderLegCollection": [
                             {
                                 "instruction": instruction,
@@ -281,7 +287,6 @@ class OrderBuilder:
 
         return order, obj
 
-
     def TRAILorder(self, trade_data, strategy_object, direction):
 
         order, obj = self.standardOrder(
@@ -291,8 +296,9 @@ class OrderBuilder:
 
         side = trade_data["Side"]
 
-        stop_price_offset = (round(
-            (order["price"]*TRAIL_STOP_PERCENTAGE), 2) if asset_type == "OPTION" else round(order["price"]*TRAIL_STOP_PERCENTAGE, 4))
+        stop_price_offset = (round((order["price"] * TRAIL_STOP_PERCENTAGE), 2)
+                             if asset_type == "OPTION"
+                             else round(order["price"] * TRAIL_STOP_PERCENTAGE, 4))
 
         #####################################
         if side == "BUY_TO_OPEN":
