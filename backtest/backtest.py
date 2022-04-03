@@ -91,7 +91,6 @@ def find_closed_positions(trader, starttime):
     return orders
 
 def grabDataframes():
-    x=0
     client = polygon.StocksClient(POLYGON_URI)
     lookback = timedelta(days=LOOKBACK_DAYS)
     end_date = datetime.now()
@@ -239,7 +238,6 @@ def evaluateDF(dataframe):
 def evaluateTakeProfit(path):
     MASTER_DF = pd.DataFrame()
     DF = pd.DataFrame()
-    # runningPL = []
 
     for take_profit_pct_factor in TAKE_PROFIT_PERCENTAGE_LIST:
         for stop_loss_pct_factor in tqdm(STOP_LOSS_PERCENTAGE_LIST):
@@ -278,19 +276,9 @@ def evaluateTakeProfit(path):
 
             MASTER_DF = pd.concat([MASTER_DF, DF], axis=0, ignore_index=False).round(decimals=2)
 
-            # runningPL = []
-    # print(runningPL)
-    # DF = pd.DataFrame(runningPL)
-    # print(DF)
-    # MASTER_DF = evaluateDF(DF)
-    # df_eval = pd.Series(df_eval).round(decimals=2)
-    # profit_minus_fees = df_eval['Profit_minus_Fees']
-    # print(f'{df_eval} \n')
-
     # discord_helpers.send_discord_alert = f'P/L if take profit is {take_profit_pct_factor * 100}% \n'\
     #                                      f'P/L if stop loss is {stop_loss_pct_factor * 100}%: \n'\
     #                                      f'Profit_minus_Fees: {profit_minus_fees}'
-
 
     MASTER_DF = MASTER_DF.sort_values(by=["Profit_minus_Fees"], ascending=False)
     print(MASTER_DF.head())
