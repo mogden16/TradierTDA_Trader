@@ -23,6 +23,7 @@ RUN_TRADIER = config.RUN_TRADIER
 TRAIL_STOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
+TRADE_MULTI_STRIKES = config.TRADE_MULTI_STRIKES
 
 class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
@@ -143,8 +144,15 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
         else:
 
-            order, obj = self.standardOrder(
-                trade_data, strategy_object, direction)
+            if order_type == "OCO" or order_type == "CUSTOM":
+
+                order, obj = self.OCOorder(
+                    trade_data, strategy_object, direction)
+
+            else:
+
+                order, obj = self.standardOrder(
+                    trade_data, strategy_object, direction)
 
         if order == None and obj == None:
 
@@ -212,8 +220,13 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
             order ([dict]): [ORDER DATA TO BE PLACED IN QUEUE COLLECTION]
         """
         # ADD TO QUEUE WITHOUT ORDER ID AND STATUS
-        self.queue.update_one(
-            {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]}, {"$set": order}, upsert=True)
+        if TRADE_MULTI_STRIKES:
+            self.queue.update_one(
+                {"Trader": self.user["Name"], "Pre_Symbol": order["Pre_Symbol"], "Strategy": order["Strategy"]}, {"$set": order}, upsert=True)
+
+        else:
+            self.queue.update_one(
+                {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]}, {"$set": order}, upsert=True)
 
         self.updateStatus()
 
@@ -261,7 +274,7 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
                     self.logger.info(
                         f"Paper Trader - Sending Queue Order To PushOrder ({modifiedAccountID(self.account_id)})")
 
-                if queue_order["Order_Type"] == "OCO":
+                if queue_order["Order_Type"] == "OCO" or queue_order["Order_Type"] == "CUSTOM":
 
                     queue_order = {**queue_order, **self.extractOCOchildren(custom)}
 
@@ -545,12 +558,24 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
         side = row["Side"]
 
-        # CHECK OPEN POSITIONS AND QUEUE
-        open_position = self.open_positions.find_one(
-            {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
+        pre_symbol = row["Pre_Symbol"]
 
-        queued = self.queue.find_one(
-            {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
+        # CHECK OPEN POSITIONS AND QUEUE
+        if TRADE_MULTI_STRIKES:
+            open_position = self.open_positions.find_one(
+                {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol, "Strategy": strategy, "Account_ID": self.account_id})
+
+            queued = self.queue.find_one(
+                {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol, "Strategy": strategy, "Account_ID": self.account_id})
+
+        else:
+            open_position = self.open_positions.find_one(
+                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy,
+                 "Account_ID": self.account_id})
+
+            queued = self.queue.find_one(
+                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy,
+                 "Account_ID": self.account_id})
 
         strategy_object = self.strategies.find_one(
             {"Strategy": strategy, "Account_ID": self.account_id})
@@ -572,6 +597,10 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
             # IS THERE AN OPEN POSITION ALREADY IN MONGO FOR THIS SYMBOL/STRATEGY COMBO
             if open_position:
+
+                if side == "BUY" or side == "BUY_TO_OPEN":
+
+                    return
 
                 direction = "CLOSE POSITION"
 

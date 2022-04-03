@@ -14,11 +14,12 @@ from gmail import Gmail
 from mongo import MongoDB
 from tradier import TradierTrader, tradier_helpers
 
-from assets import pushsafer, helper_functions, techanalysis
+from assets import pushsafer, helper_functions, techanalysis, streamprice
 from assets.exception_handler import exception_handler
 from assets.timeformatter import Formatter
 from assets.multifilehandler import MultiFileHandler
 from discord import discord_helpers, discord_scanner
+from backtest import backtest
 
 RUN_TRADIER = config.RUN_TRADIER
 RUN_DISCORD = config.RUN_DISCORD
@@ -215,7 +216,7 @@ class Main:
 
         trade_alerts = []
         if RUN_DISCORD:
-            discord_alerts = discord_scanner.discord_messages(start_time)
+            discord_alerts = discord_scanner.discord_messages(start_time, mins=3)
             if discord_alerts != None:
                 for alert in discord_alerts:
                     position = self.find_mongo_analysisPosition(alert['Pre_Symbol'], alert['Entry_Date'])
@@ -311,34 +312,35 @@ class Main:
             {"Trader": live_trader.user["Name"], "Symbol": value['Symbol'], "Strategy": value['Strategy']})
 
         if signal_type == "CLOSE" and position is not None:
-                obj = {
-                    "Symbol": value['Symbol'],
-                    "Side": "SELL_TO_CLOSE",
-                    "Pre_Symbol": value['Pre_Symbol'],
-                    "Exp_Date": value['Exp_Date'],
-                    "Strike_Price": value['Strike_Price'],
-                    "Option_Type": value['Option_Type'],
-                    "Strategy": value['Strategy'],
-                    "Asset_Type": "OPTION",
-                    "Trade_Type": trade_type
-                }
-                trade_data.append(obj)
+
+            obj = {
+                "Symbol": value['Symbol'],
+                "Side": "SELL_TO_CLOSE",
+                "Pre_Symbol": value['Pre_Symbol'],
+                "Exp_Date": value['Exp_Date'],
+                "Strike_Price": value['Strike_Price'],
+                "Option_Type": value['Option_Type'],
+                "Strategy": value['Strategy'],
+                "Asset_Type": "OPTION",
+                "Trade_Type": trade_type
+            }
+            trade_data.append(obj)
 
         elif signal_type == "BUY":
             if not IS_TESTING:
                 url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={value['Symbol']}&contractType={value['Option_Type']}&includeQuotes=FALSE&strike={value['Strike_Price']}&fromDate={value['Exp_Date']}&toDate={value['Exp_Date']}"
                 resp = live_trader.tdameritrade.sendRequest(url)
                 expdatemapkey = value['Option_Type'].lower() + "ExpDateMap"
-                if list(resp.keys())[0]=="error" or list(resp.values())[1]=="FAILED":
+                if list(resp.keys())[0] == "error" or list(resp.values())[1] == "FAILED":
                     print(f"Received an error for {value['Symbol']}")
-                    self.error+=1
+                    self.error += 1
                     return
                 else:
                     for dt in resp[expdatemapkey]:
                         for strikePrice in resp[expdatemapkey][dt]:
-                            last=resp[expdatemapkey][dt][strikePrice][0]["last"]
-                            volume=resp[expdatemapkey][dt][strikePrice][0]["totalVolume"]
-                            delta=resp[expdatemapkey][dt][strikePrice][0]["delta"]
+                            last = resp[expdatemapkey][dt][strikePrice][0]["last"]
+                            volume = resp[expdatemapkey][dt][strikePrice][0]["totalVolume"]
+                            delta = resp[expdatemapkey][dt][strikePrice][0]["delta"]
                             oi = resp[expdatemapkey][dt][strikePrice][0]["openInterest"]
 
             obj = {
@@ -385,7 +387,7 @@ class Main:
 
         else:
 
-            #UPDATE STATUS
+            # UPDATE STATUS
             for mongo_trader in self.traders.values():
                 temp_trade_data = self.get_tradeFormat(mongo_trader, value, trade_signal, trade_type, "TRUE" if isRunner else "FALSE")
                 for trade_data in temp_trade_data:
@@ -460,59 +462,10 @@ class Main:
                     api_trader.updateStatus()
 
             if RUN_WEBSOCKET:
-                tradier_helpers.streamPrice(self)
+                streamprice.streamPrice(self)
 
             if main.error > 0:
                 print('errors', main.error)
-
-
-            # """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF
-            # QUEUED ORDERS ON TRADIER & MONGO """
-            # tradier_queued_list = []
-            # tradier_queued = self.tradier.get_queuedPositions()
-            # if len(tradier_queued) == 0 or tradier_queued == 'null':
-            #     traider_queued = []
-            # else:
-            #     for queued in tradier_queued:
-            #         tradier_queued_list.append(queued['id'])
-            #
-            # mongo_queued_list = []
-            # mongo_queued = list(self.mongo.queue.find({}))
-            # for queued in mongo_queued:
-            #     mongo_queued_list.append(queued['Order_ID'])
-            #
-            # tradier_queued_list.sort()
-            # mongo_queued_list.sort()
-            #
-            # if tradier_queued_list == mongo_queued_list:
-            #     pass
-            # else:
-            #     print(f'something went wrong, tradier queued={tradier_queued} and mongo queued={mongo_queued}')
-            #
-            # """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF
-            # OPEN ORDERS ON TRADIER & MONGO """
-            # tradier_open_list = []
-            # tradier_open = self.tradier.get_openPositions()
-            # if len(tradier_open) == 0 or tradier_open['positions'] == 'null':
-            #     pass
-            # elif len(tradier_open) == 1:
-            #     tradier_open_list.append(tradier_open['positions']['position']['id'])
-            # else:
-            #     tradier_open = tradier_open['positions']['position']
-            #     for openn in tradier_open:
-            #         tradier_open_list.append(openn['id'])
-            #
-            # mongo_open_list = []
-            # mongo_open = list(self.mongo.open_positions.find({}))
-            # for openn in mongo_open:
-            #     mongo_open_list.append(openn['Order_ID'])
-            #
-            # tradier_open_list.sort()
-            # mongo_open_list.sort()
-            # if tradier_open_list == mongo_open_list:
-            #     pass
-            # else:
-            #     print(f'something went wrong, tradier openOrders={tradier_open} and mongo openOrders={mongo_open}')
 
             time.sleep(helper_functions.selectSleep())
 
@@ -525,7 +478,59 @@ if __name__ == "__main__":
     main = Main()
 
     main.run()
-    # main.connectALL()
-    # main.setupTraders()
-    # positions = main.tradier.get_openPositions()
-    # print(positions)
+
+    backtest.run(main)
+
+
+
+
+
+
+
+# """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF
+# QUEUED ORDERS ON TRADIER & MONGO """
+# tradier_queued_list = []
+# tradier_queued = self.tradier.get_queuedPositions()
+# if len(tradier_queued) == 0 or tradier_queued == 'null':
+#     traider_queued = []
+# else:
+#     for queued in tradier_queued:
+#         tradier_queued_list.append(queued['id'])
+#
+# mongo_queued_list = []
+# mongo_queued = list(self.mongo.queue.find({}))
+# for queued in mongo_queued:
+#     mongo_queued_list.append(queued['Order_ID'])
+#
+# tradier_queued_list.sort()
+# mongo_queued_list.sort()
+#
+# if tradier_queued_list == mongo_queued_list:
+#     pass
+# else:
+#     print(f'something went wrong, tradier queued={tradier_queued} and mongo queued={mongo_queued}')
+#
+# """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF
+# OPEN ORDERS ON TRADIER & MONGO """
+# tradier_open_list = []
+# tradier_open = self.tradier.get_openPositions()
+# if len(tradier_open) == 0 or tradier_open['positions'] == 'null':
+#     pass
+# elif len(tradier_open) == 1:
+#     tradier_open_list.append(tradier_open['positions']['position']['id'])
+# else:
+#     tradier_open = tradier_open['positions']['position']
+#     for openn in tradier_open:
+#         tradier_open_list.append(openn['id'])
+#
+# mongo_open_list = []
+# mongo_open = list(self.mongo.open_positions.find({}))
+# for openn in mongo_open:
+#     mongo_open_list.append(openn['Order_ID'])
+#
+# tradier_open_list.sort()
+# mongo_open_list.sort()
+# if tradier_open_list == mongo_open_list:
+#     pass
+# else:
+#     print(f'something went wrong, tradier openOrders={tradier_open} and mongo openOrders={mongo_open}')

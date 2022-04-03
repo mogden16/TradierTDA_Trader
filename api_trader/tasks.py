@@ -5,6 +5,7 @@ import config
 import pytz
 import requests
 import traceback
+from random import randrange
 from tradier import tradier_constants
 from datetime import datetime, timedelta
 from pymongo.errors import WriteError, WriteConcernError
@@ -44,11 +45,10 @@ class Tasks:
                         'Accept': 'application/json'
                         }
 
-
-    def getTradierorder(self, id):
+    def getTradierorder(self, order_id):
 
         api_path = tradier_constants.API_PATH['account_order_status']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(order_id))}'
 
         response = requests.get(path,
                                 params={'includeTags': 'false'},
@@ -58,10 +58,10 @@ class Tasks:
 
         return json_response
 
-    def cancelTradierorder(self, id):
+    def cancelTradierorder(self, order_id):
 
         api_path = tradier_constants.API_PATH['account_order_status']
-        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.account_id)).replace("{id}", str(id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.account_id)).replace("{id}", str(order_id))}'
 
         response = requests.delete(path,
                                 data={},
@@ -71,7 +71,7 @@ class Tasks:
 
         return json_response
 
-    def tradiercloseOrder(self, queue_order, spec_order, data_integrity="Reliable"):
+    def set_closeOrder(self, queue_order, spec_order, data_integrity="Reliable"):
         """ METHOD PUSHES ORDER TO EITHER OPEN POSITIONS OR CLOSED POSITIONS COLLECTION IN MONGODB.
             IF BUY ORDER, THEN PUSHES TO OPEN POSITIONS.
             IF SELL ORDER, THEN PUSHES TO CLOSED POSITIONS.
@@ -154,31 +154,7 @@ class Tasks:
 
         message_to_push = None
 
-        if direction == "OPEN POSITION":
-
-            obj["Qty"] = shares
-
-            obj["Entry_Price"] = price
-
-            obj["Entry_Date"] = getDatetime()
-
-            obj["Max_Price"] = price
-
-            obj['Order_ID'] = queue_order['Order_ID']
-
-            obj["Trail_Stop_Value"] = price * TRAILSTOP_PERCENTAGE
-
-            collection_insert = self.mongo.open_positions.insert_one
-
-            try:
-                obj['childOrderStrategies'] = queue_order['childOrderStrategies']
-
-            except:
-                pass
-
-            discord_message_to_push = f":rocket: TradingBOT just opened \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {shares} \n Price: ${price} \n Strategy: {strategy} \n Asset Type: {asset_type} \n Date: {getDatetime()} \n :rocket: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
-
-        elif direction == "CLOSE POSITION":
+        if direction == "CLOSE POSITION":
 
             position = self.mongo.open_positions.find_one(
                 {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy})
@@ -271,7 +247,7 @@ class Tasks:
             trulycanceled = 0
             for order in childOrderStrategies:
 
-                if RUN_LIVE_TRADER:
+                if RUN_LIVE_TRADER and not RUN_TRADIER:
 
                     spec_order = self.tdameritrade.getSpecificOrder(order['Order_ID'])
 
@@ -291,11 +267,15 @@ class Tasks:
 
                     if RUN_TRADIER:
 
-                        self.tradiercloseOrder(position, spec_order['order'])
+                        self.set_closeOrder(position, spec_order['order'])
+
+                    elif RUN_LIVE_TRADER and not RUN_TRADIER:
+
+                        self.set_closeOrder(position, spec_order)
 
                     else:
 
-                        if position['childOrderStrategies'][str(order)]['Exit_Type'] == "STOP LOSS":
+                        if position['childOrderStrategies'][order]['Exit_Type'] == "STOP LOSS":
 
                             price = self.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']]['bidPrice']
 
@@ -304,14 +284,12 @@ class Tasks:
                             price = self.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']][SELL_PRICE]
 
                         spec_order = {
-                            'price': price
+                            'price': price,
+                            'side': "SELL_TO_CLOSE",
+                            'direction': "CLOSE POSITION"
                         }
 
-                        position["Side"] = "SELL_TO_CLOSE"
-
-                        position["Direction"] = "CLOSE POSITION"
-
-                        self.pushOrder(position, spec_order)
+                        self.set_closeOrder(position, spec_order)
 
                 elif new_status.upper() == "CANCELED" or new_status.upper() == "REJECTED":
 
@@ -341,7 +319,7 @@ class Tasks:
                 else:
 
                     self.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"], "Strategy": position["Strategy"]},
-                        {"$set": {f"childOrderStrategies.{x}.Order_Status": new_status}})
+                        {"$set": {f"childOrderStrategies.{order}.Order_Status": new_status}})
 
                 x += 1
 
@@ -376,7 +354,8 @@ class Tasks:
                 oco_children['childOrderStrategies'][str(i)] = {
                     "Side": "sell_to_close",
                     "Order_Status": "open",
-                    "Exit_Type": "TAKE PROFIT" if i == 0 else "STOP LOSS"
+                    "Exit_Type": "TAKE PROFIT" if i == 0 else "STOP LOSS",
+                    "Order_ID": randrange(10000,99999)
                 }
 
                 if i == 0:

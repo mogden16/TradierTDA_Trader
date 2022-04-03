@@ -16,6 +16,7 @@ RUN_TRADIER = config.RUN_TRADIER
 RUN_WEBSOCKET = config.RUN_WEBSOCKET
 TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 IS_TESTING = config.IS_TESTING
+TRADE_MULTI_STRIKES = config.TRADE_MULTI_STRIKES
 
 class TradierTrader(tradierOrderBuilder):
 
@@ -159,9 +160,21 @@ class TradierTrader(tradierOrderBuilder):
         return json_response, status_code
 
     @exception_handler
-    def cancel_order(self, id):
+    def modify_stopprice(self, order_id, price):
         api_path = tradier_constants.API_PATH['account_order_status']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(order_id))}'
+
+        response = requests.put(path,
+                                data={'stop': str(price)},
+                                headers=self.headers
+                                )
+        json_response = response.json()
+        return json_response
+
+    @exception_handler
+    def cancel_order(self, order_id):
+        api_path = tradier_constants.API_PATH['account_order_status']
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(order_id))}'
 
         response = requests.post(path,
                                  data={},
@@ -175,9 +188,12 @@ class TradierTrader(tradierOrderBuilder):
     @exception_handler
     def cancelALLorders(self):
 
-        all_orders = self.get_allPositions()['orders']
+        all_orders = self.get_allPositions()
 
-        for order in all_orders:
+        if all_orders == None:
+            return
+
+        for order in all_orders['orders']:
 
             current_status = order['order']['status']
 
@@ -210,43 +226,22 @@ class TradierTrader(tradierOrderBuilder):
 
         # oi = trade_data["Open_Interest"]
 
-        if order_type == "CUSTOM":
+        if order_type == "STANDARD":
 
-            if special_order_type == "STANDARD":
+            order, obj = self.standardOrder(
+                trade_data, strategy_object, direction, mongo_trader)
 
-                order, obj = self.standardOrder(
-                    trade_data, strategy_object, direction, mongo_trader)
+        elif order_type == "OCO" or order_type == "CUSTOM":
 
-            elif special_order_type == "OCO":
+            order, obj = self.otoco_order(
+                trade_data, strategy_object, direction, mongo_trader)
 
-                order, obj = self.otoco_order(
-                    trade_data, strategy_object, direction, mongo_trader)
+        elif order_type == "TRAIL":
 
-            elif special_order_type == "TRAIL":
-
-                pass
-
-            else:
-                print('your order_type in Mongo is incorrect')
+            pass
 
         else:
-
-            if order_type == "STANDARD":
-
-                order, obj = self.standardOrder(
-                    trade_data, strategy_object, direction, mongo_trader)
-
-            elif order_type == "OCO":
-
-                order, obj = self.otoco_order(
-                    trade_data, strategy_object, direction, mongo_trader)
-
-            elif order_type == "TRAIL":
-
-                pass
-
-            else:
-                print('your order_type in Mongo is incorrect')
+            print('your order_type in Mongo is incorrect')
 
         if order == None and obj == None:
 
@@ -332,9 +327,17 @@ class TradierTrader(tradierOrderBuilder):
 
             if current_status == 'pending' or current_status == 'open' or current_status == 'filled':
 
-                self.mongo.queue.update_one(
-                    {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]},
-                    {"$set": order}, upsert=True)
+                if TRADE_MULTI_STRIKES:
+
+                    self.mongo.queue.update_one(
+                        {"Trader": self.user["Name"], "Pre_Symbol": order["Pre_Symbol"], "Strategy": order["Strategy"]},
+                        {"$set": order}, upsert=True)
+
+                else:
+
+                    self.mongo.queue.update_one(
+                        {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]},
+                        {"$set": order}, upsert=True)
 
                 self.updateStatus()
 
@@ -627,12 +630,26 @@ class TradierTrader(tradierOrderBuilder):
 
         side = row["Side"]
 
-        # CHECK OPEN POSITIONS AND QUEUE
-        open_position = self.mongo.open_positions.find_one(
-            {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
+        pre_symbol = row["Pre_Symbol"]
 
-        queued = self.mongo.queue.find_one(
-            {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy, "Account_ID": self.account_id})
+        # CHECK OPEN POSITIONS AND QUEUE
+        if TRADE_MULTI_STRIKES:
+            open_position = self.mongo.open_positions.find_one(
+                {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol, "Strategy": strategy,
+                 "Account_ID": self.account_id})
+
+            queued = self.mongo.queue.find_one(
+                {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol, "Strategy": strategy,
+                 "Account_ID": self.account_id})
+
+        else:
+            open_position = self.mongo.open_positions.find_one(
+                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy,
+                 "Account_ID": self.account_id})
+
+            queued = self.mongo.queue.find_one(
+                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy,
+                 "Account_ID": self.account_id})
 
         strategy_object = self.mongo.strategies.find_one(
             {"Strategy": strategy})
@@ -654,6 +671,9 @@ class TradierTrader(tradierOrderBuilder):
 
             # IS THERE AN OPEN POSITION ALREADY IN MONGO FOR THIS SYMBOL/STRATEGY COMBO
             if open_position:
+
+                if side == "BUY" or side == "BUY_TO_OPEN":
+                    return
 
                 direction = "CLOSE POSITION"
 

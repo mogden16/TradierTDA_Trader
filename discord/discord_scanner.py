@@ -23,7 +23,7 @@ def try_parsing_date(text):
 
     raise ValueError('no valid date format found')
 
-def discord_messages(start_time):
+def discord_messages(start_time, mins):
 
         discord_alerts = []
 
@@ -40,7 +40,7 @@ def discord_messages(start_time):
         for value in jsonn:
             hedge = False
             value['timestamp'] = try_parsing_date(value['timestamp'])
-            if value['timestamp'] >= start_time - timedelta(minutes=1):
+            if value['timestamp'] >= start_time - timedelta(minutes=mins):
                 if value['author']['username'] == DISCORD_USER:
                     if len(value['embeds']) == 0:
                         continue
