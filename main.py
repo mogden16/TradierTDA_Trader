@@ -314,8 +314,6 @@ class Main:
                 temp_trade_data=self.get_tradeFormat(api_trader, value, trade_signal, trade_type, "TRUE" if isRunner else "FALSE")
                 for trade_data in temp_trade_data:
                     api_trader.runTrader(trade_data)
-                    # if not RUN_LIVE_TRADER:
-                    #     api_trader.runTrader(trade_data=None)
 
         else:
 
