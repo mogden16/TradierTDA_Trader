@@ -1,8 +1,5 @@
-import discord.discord_helpers
 from assets.helper_functions import getDatetime, modifiedAccountID
-from api_trader.tasks import Tasks
-from td_websocket.stream import TDWebsocket
-from threading import Thread
+from assets.tasks import Tasks
 from assets.exception_handler import exception_handler
 from api_trader.order_builder import OrderBuilder
 import os
@@ -25,7 +22,7 @@ TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
 TRADE_MULTI_STRIKES = config.TRADE_MULTI_STRIKES
 
-class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
+class ApiTrader(OrderBuilder):
 
     def __init__(self, user, mongo, push, logger, account_id, tdameritrade):
         """
@@ -81,24 +78,6 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
         self.no_ids_list = []
 
         OrderBuilder.__init__(self)
-
-        Tasks.__init__(self)
-
-        TDWebsocket.__init__(self)
-
-        # If user wants to run tasks
-        if RUN_TASKS:
-
-            Thread(target=self.runTasks, daemon=True).start()
-
-        if RUN_WEBSOCKET:
-
-            Thread(target=self.runWebsocket, daemon=True).start()
-
-        if not RUN_WEBSOCKET and not RUN_TASKS:
-
-            self.logger.info(
-                f"NOT RUNNING TASKS FOR {self.user['Name']} ({modifiedAccountID(self.account_id)})\n", extra={'log': False})
 
         time.sleep(.5)  # SLEEPS FOR .5 SO THAT IT CAN STATE RUN_WEBSOCKET FIRST
         if RUN_LIVE_TRADER:
@@ -285,7 +264,7 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
 
                 if queue_order["Order_Type"] == "OCO" or queue_order["Order_Type"] == "CUSTOM":
 
-                    queue_order = {**queue_order, **self.extractOCOchildren(custom)}
+                    queue_order = {**queue_order, **Tasks.extractOCOchildren(self, custom)}
 
                 self.pushOrder(queue_order, custom, data_integrity)
 

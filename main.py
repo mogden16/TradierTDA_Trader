@@ -10,15 +10,18 @@ import constants as c
 import vectorbt as vbt
 
 from api_trader import ApiTrader
+from td_websocket.stream import TDWebsocket
 from tdameritrade import TDAmeritrade
 from gmail import Gmail
 from mongo import MongoDB, mongo_helpers
 from tradier import TradierTrader
+from threading import Thread
 
 from assets import pushsafer, helper_functions, techanalysis, streamprice
 from assets.exception_handler import exception_handler
 from assets.timeformatter import Formatter
 from assets.multifilehandler import MultiFileHandler
+from assets.tasks import Tasks
 from discord import discord_helpers, discord_scanner
 from backtest import backtest
 
@@ -34,12 +37,17 @@ TIMEZONE = config.TIMEZONE
 TURN_OFF_TRADES = config.TURN_OFF_TRADES
 SELL_ALL_POSITIONS = config.SELL_ALL_POSITIONS
 SHUTDOWN_TIME = config.SHUTDOWN_TIME
+RUN_TASKS = config.RUN_TASKS
 
-class Main:
+class Main(Tasks, TDWebsocket):
 
     def __init__(self):
 
         self.error = 0
+
+        Tasks.__init__(self)
+
+        TDWebsocket.__init__(self)
 
     def connectALL(self):
         """ METHOD INITIALIZES LOGGER, MONGO, GMAIL, PAPERTRADER.
@@ -95,7 +103,6 @@ class Main:
 
         return False
 
-
     @exception_handler
     def setupTraders(self):
         """ METHOD GETS ALL USERS ACCOUNTS FROM MONGO AND CREATES LIVE TRADER INSTANCES FOR THOSE ACCOUNTS.
@@ -129,7 +136,23 @@ class Main:
 
                             self.tradier = TradierTrader(user, self.mongo, self.logger)
 
+                            self.user = user
+
+                            self.account_id = account_id
+
                             time.sleep(0.1)
+
+                            if RUN_TASKS:
+                                Thread(target=self.runTasks, daemon=True).start()
+
+                            if RUN_WEBSOCKET:
+                                Thread(target=self.runWebsocket, daemon=True).start()
+
+                            if not RUN_WEBSOCKET and not RUN_TASKS:
+                                self.logger.info(
+                                    f"NOT RUNNING TASKS FOR {self.user['Name']} "
+                                    f"({helper_functions.modifiedAccountID(self.account_id)})\n",
+                                    extra={'log': False})
 
                         else:
 
@@ -412,6 +435,7 @@ class Main:
                 print(f'errors: {self.error}')
 
             time.sleep(helper_functions.selectSleep())
+            print('\n')
 
 
 if __name__ == "__main__":

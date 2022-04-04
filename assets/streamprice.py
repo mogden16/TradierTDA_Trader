@@ -121,212 +121,125 @@ def streamPrice(trader):
 
             elif order_type == "CUSTOM":
 
-                if RUN_TRADIER:
-                    for i in range(0, 2):
+                for i in range(0, 2):
+                    if RUN_TRADIER:
                         order = open_position['childOrderStrategies'][i]
-
-                        if 'Stop_Price' not in order:
-                            continue
-
-                        else:
-
-                            stop_order_id = order['Order_ID']
-
-                            max_price = open_position['Max_Price']
-
-                            limits = {
-                                'target1': round(entry_price * (1 + .05), 2),
-                                'target2': round(entry_price * (1 + .10), 2),
-                                'target3': round(entry_price * (1 + .20), 2),
-                                'target4': round(entry_price * (1 + .30), 2),
-                                'target5': round(entry_price * (1 + .50), 2),
-                                'target6': round(entry_price * (1 + .70), 2),
-                                'stop1': round(entry_price * (1 - .10), 2),
-                                'stop2': round(entry_price * (1 + 0), 2),
-                                'stop3': round(entry_price * (1 + .10), 2),
-                                'stop4': round(entry_price * (1 + .20), 2),
-                                'stop5': round(entry_price * (1 + .30), 2),
-                                'stop6': round(entry_price * (1 + .50), 2)
-                            }
-
-                            if current_price > max_price:
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Max_Price': current_price}},
-                                                               upsert=False)
-
-                            if max_price < limits['target1']:
-                                target_price = limits['target1']
-                                stoploss_price = limits['stop1']
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-                                                               upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-                                                               upsert=True)
-                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
-
-                            elif limits['target1'] <= max_price < limits['target2']:
-                                target_price = limits['target2']
-                                stoploss_price = limits['stop2']
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-                                                               upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-                                                               upsert=True)
-                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
-
-                            elif limits['target2'] <= max_price < limits['target3']:
-                                target_price = limits['target3']
-                                stoploss_price = limits['stop3']
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-                                                               upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-                                                               upsert=True)
-                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
-
-                            elif limits['target3'] <= max_price < limits['target4']:
-                                target_price = limits['target4']
-                                stoploss_price = limits['stop4']
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-                                                               upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-                                                               upsert=True)
-                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
-
-                            elif limits['target4'] <= max_price < limits['target5']:
-                                target_price = limits['target5']
-                                stoploss_price = limits['stop5']
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-                                                               upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-                                                               upsert=True)
-                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
-
-                            elif limits['target5'] <= max_price < limits['target6']:
-                                target_price = limits['target6']
-                                stoploss_price = limits['stop6']
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
-                                                               upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
-                                                               upsert=True)
-                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
-
-                            elif max_price >= limits['target6']:
-                                trailstop_price = round(max_price - trail_stop_value, 2)
-
-                                if current_price < trailstop_price:
-                                    print('current_price is lower than trailstop price, closing position')
-
-                            else:
-                                print('error with streaming positions')
-
-                            print(
-                                f'{pre_symbol}   TargetPrice {target_price}   currentPrice {current_price}   '
-                                f'entryPrice {entry_price}   stoplossPrice{stoploss_price} \n')
-
-                else:
-
-                    for i in range(0, 2):
+                    else:
                         order = open_position['childOrderStrategies'][str(i)]
 
-                        if 'Stop_Price' not in order:
-                            continue
+                    if 'Stop_Price' not in order:
+                        continue
+
+                    else:
+
+                        stop_order_id = order['Order_ID']
+                        max_price = open_position['Max_Price']
+
+                        limits = {
+                            'target1': round(entry_price * (1 + .05), 2),
+                            'target2': round(entry_price * (1 + .10), 2),
+                            'target3': round(entry_price * (1 + .20), 2),
+                            'target4': round(entry_price * (1 + .30), 2),
+                            'target5': round(entry_price * (1 + .50), 2),
+                            'target6': round(entry_price * (1 + .70), 2),
+                            'stop1': round(entry_price * (1 - .10), 2),
+                            'stop2': round(entry_price * (1 + 0), 2),
+                            'stop3': round(entry_price * (1 + .10), 2),
+                            'stop4': round(entry_price * (1 + .20), 2),
+                            'stop5': round(entry_price * (1 + .30), 2),
+                            'stop6': round(entry_price * (1 + .50), 2)
+                        }
+
+                        if current_price > max_price:
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Max_Price': current_price}},
+                                                           upsert=False)
+
+                        if max_price < limits['target1']:
+                            target_price = limits['target1']
+                            stoploss_price = limits['stop1']
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                           upsert=True)
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'childOrderStrategies.1.Stop_Price': stoploss_price}},
+                                                           upsert=True)
+                            if RUN_TRADIER:
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
+
+                        elif limits['target1'] <= max_price < limits['target2']:
+                            target_price = limits['target2']
+                            stoploss_price = limits['stop2']
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                           upsert=True)
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'childOrderStrategies.1.Stop_Price': stoploss_price}},
+                                                           upsert=True)
+                            if RUN_TRADIER:
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
+
+                        elif limits['target2'] <= max_price < limits['target3']:
+                            target_price = limits['target3']
+                            stoploss_price = limits['stop3']
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                           upsert=True)
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'childOrderStrategies.1.Stop_Price': stoploss_price}},
+                                                           upsert=True)
+                            if RUN_TRADIER:
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
+
+                        elif limits['target3'] <= max_price < limits['target4']:
+                            target_price = limits['target4']
+                            stoploss_price = limits['stop4']
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                           upsert=True)
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'childOrderStrategies.1.Stop_Price': stoploss_price}},
+                                                           upsert=True)
+                            if RUN_TRADIER:
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
+
+                        elif limits['target4'] <= max_price < limits['target5']:
+                            target_price = limits['target5']
+                            stoploss_price = limits['stop5']
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                           upsert=True)
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'childOrderStrategies.1.Stop_Price': stoploss_price}},
+                                                           upsert=True)
+                            if RUN_TRADIER:
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
+
+                        elif limits['target5'] <= max_price < limits['target6']:
+                            target_price = limits['target6']
+                            stoploss_price = limits['stop6']
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Target_Price': target_price}},
+                                                           upsert=True)
+                            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'childOrderStrategies.1.Stop_Price': stoploss_price}},
+                                                           upsert=True)
+                            if RUN_TRADIER:
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
+
+                        elif max_price >= limits['target6']:
+                            trailstop_price = round(max_price - trail_stop_value, 2)
+
+                            if current_price < trailstop_price:
+                                print('current_price is lower than trailstop price, closing position')
 
                         else:
+                            print('error with streaming positions')
 
-                            stop_order_id = order['Order_ID']
-                            max_price = open_position['Max_Price']
-
-                            limits = {
-                                'target1': round(entry_price * (1 + .05), 2),
-                                'target2': round(entry_price * (1 + .10), 2),
-                                'target3': round(entry_price * (1 + .20), 2),
-                                'target4': round(entry_price * (1 + .30), 2),
-                                'target5': round(entry_price * (1 + .50), 2),
-                                'target6': round(entry_price * (1 + .70), 2),
-                                'stop1': round(entry_price * (1 - .10), 2),
-                                'stop2': round(entry_price * (1 + 0), 2),
-                                'stop3': round(entry_price * (1 + .10), 2),
-                                'stop4': round(entry_price * (1 + .20), 2),
-                                'stop5': round(entry_price * (1 + .30), 2),
-                                'stop6': round(entry_price * (1 + .50), 2)
-                            }
-
-                            if current_price > max_price:
-                                trader.open_positions.update_one({"_id": id}, {"$set": {'Max_Price': current_price}},
-                                                                 upsert=False)
-
-                            if max_price < limits['target1']:
-                                target_price = limits['target1']
-                                stoploss_price = limits['stop1']
+                        if not RUN_TRADIER:
+                            if current_price <= stoploss_price:
+                                print('current_price exceeds StopLoss price, closing position')
                                 trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'Target_Price': target_price}},
-                                                                       upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'StopLoss_Price': stoploss_price}},
+                                                                       {"$set": {
+                                                                           'childOrderStrategies.1.Order_Status': 'FILLED'}},
                                                                        upsert=True)
 
-                            elif limits['target1'] <= max_price < limits['target2']:
-                                target_price = limits['target2']
-                                stoploss_price = limits['stop2']
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'Target_Price': target_price}},
-                                                                       upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'StopLoss_Price': stoploss_price}},
-                                                                       upsert=True)
-
-                            elif limits['target2'] <= max_price < limits['target3']:
-                                target_price = limits['target3']
-                                stoploss_price = limits['stop3']
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'Target_Price': target_price}},
-                                                                       upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'StopLoss_Price': stoploss_price}},
-                                                                       upsert=True)
-
-                            elif limits['target3'] <= max_price < limits['target4']:
-                                target_price = limits['target4']
-                                stoploss_price = limits['stop4']
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'Target_Price': target_price}},
-                                                                       upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'StopLoss_Price': stoploss_price}},
-                                                                       upsert=True)
-
-                            elif limits['target4'] <= max_price < limits['target5']:
-                                target_price = limits['target5']
-                                stoploss_price = limits['stop5']
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'Target_Price': target_price}},
-                                                                       upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'StopLoss_Price': stoploss_price}},
-                                                                       upsert=True)
-
-                            elif limits['target5'] <= max_price < limits['target6']:
-                                target_price = limits['target6']
-                                stoploss_price = limits['stop6']
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'Target_Price': target_price}},
-                                                                       upsert=True)
-                                trader.mongo.open_positions.update_one({"_id": id},
-                                                                       {"$set": {'StopLoss_Price': stoploss_price}},
-                                                                       upsert=True)
-
-                            elif max_price >= limits['target6']:
-                                trailstop_price = round(max_price - trail_stop_value, 2)
-
-                                if current_price < trailstop_price:
-                                    print('current_price is lower than trailstop price, closing position')
-
-                            else:
-                                print('error with streaming positions')
-
-                            if current_price < stoploss_price:
-                                trader.set_trader(open_position, trade_signal="SELL", trade_type="MARKET")
-
+                        if current_price > entry_price:
                             print(
                                 f'{pre_symbol}   TargetPrice {target_price}   currentPrice {current_price}   '
-                                f'entryPrice {entry_price}   stoplossPrice{stoploss_price} \n')
+                                f'entryPrice {entry_price}   stoplossPrice{stoploss_price}')
+                        else:
+                            print(
+                                f'{pre_symbol}   TargetPrice {target_price}   entryPrice {entry_price}   '
+                                f'currentPrice {current_price}   stoplossPrice{stoploss_price}')
+
 
 
             #

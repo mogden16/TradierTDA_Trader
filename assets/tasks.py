@@ -165,7 +165,10 @@ class Tasks:
 
             obj["Entry_Date"] = position["Entry_Date"]
 
-            obj["Exit_Price"] = spec_order['avg_fill_price']
+            if RUN_TRADIER:
+                obj["Exit_Price"] = spec_order['avg_fill_price']
+            else:
+                obj["Exit_Price"] = price
 
             obj["Exit_Date"] = getDatetime()
 
@@ -235,7 +238,7 @@ class Tasks:
         """ Checks OCO triggers (stop loss/ take profit) to see if either one has filled. If so, then close position in mongo like normal.
 
         """
-        open_positions = self.open_positions.find(
+        open_positions = self.mongo.open_positions.find(
             {"Trader": self.user["Name"]})
 
         for position in open_positions:
@@ -251,8 +254,8 @@ class Tasks:
             for order in childOrderStrategies:
 
                 if RUN_LIVE_TRADER and not RUN_TRADIER:
-
-                    spec_order = self.tdameritrade.getSpecificOrder(order['Order_ID'])
+                    for td_trader in self.traders.values():
+                        spec_order = td_trader.tdameritrade.getSpecificOrder(order['Order_ID'])
 
                     new_status = spec_order['order']["status"]
 
@@ -279,12 +282,12 @@ class Tasks:
                     else:
 
                         if position['childOrderStrategies'][order]['Exit_Type'] == "STOP LOSS":
-
-                            price = self.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']]['bidPrice']
+                            for td_trader in self.traders.values():
+                                price = td_trader.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']]['bidPrice']
 
                         else:
-
-                            price = self.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']][SELL_PRICE]
+                            for td_trader in self.traders.values():
+                                price = td_trader.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']][SELL_PRICE]
 
                         spec_order = {
                             'price': price,
@@ -309,7 +312,7 @@ class Tasks:
                             "Date": getDatetime(),
                             "Account_ID": self.account_id
                         }
-                        self.rejected.insert_one(
+                        self.mongo.rejected.insert_one(
                             other) if new_status == "REJECTED" else self.canceled.insert_one(other)
 
                         self.logger.info(
@@ -322,11 +325,11 @@ class Tasks:
                 else:
 
                     if RUN_TRADIER:
-                        self.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"], "Strategy": position["Strategy"]},
+                        self.mongo.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"], "Strategy": position["Strategy"]},
                             {"$set": {f"childOrderStrategies.{x}.Order_Status": new_status}})
 
                     else:
-                        self.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"],
+                        self.mongo.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"],
                                                         "Strategy": position["Strategy"]},
                                                        {"$set": {f"childOrderStrategies.{order}.Order_Status": new_status}})
                 x += 1
@@ -443,7 +446,7 @@ class Tasks:
                             "Date": getDatetime()
                         }
 
-                        self.canceled.insert_one(other)
+                        self.mongo.canceled.insert_one(other)
 
                         self.queue.delete_one(
                             {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]})
@@ -455,7 +458,8 @@ class Tasks:
                         discord_helpers.send_discord_alert(discord_alert)
 
                 else:
-                    resp = self.tdameritrade.cancelOrder(id)
+                    for td_trader in self.traders.values():
+                        resp = td_trader.tdameritrade.cancelOrder(id)
 
                     if resp.status_code == 200 or resp.status_code == 201:
 
@@ -470,7 +474,7 @@ class Tasks:
                             "Date": getDatetime()
                         }
 
-                        self.canceled.insert_one(other)
+                        self.mongo.canceled.insert_one(other)
 
                         self.queue.delete_one(
                             {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]})
