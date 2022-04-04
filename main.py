@@ -400,8 +400,9 @@ class Main:
                 for api_trader in self.traders.values():
                     api_trader.updateStatus()
 
-            """  USE WEBSOCKET TO PRINT CURRENT PRICES - 
-            IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT  """
+            """  
+            USE WEBSOCKET TO PRINT CURRENT PRICES - IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT  
+            """
             if RUN_WEBSOCKET:
                 streamprice.streamPrice(self)
 
