@@ -235,14 +235,17 @@ class Tasks:
         """ Checks OCO triggers (stop loss/ take profit) to see if either one has filled. If so, then close position in mongo like normal.
 
         """
-
         open_positions = self.open_positions.find(
-            {"Trader": self.user["Name"], "Order_Type": "OCO"})
+            {"Trader": self.user["Name"]})
 
         for position in open_positions:
+            try:
 
-            childOrderStrategies = position["childOrderStrategies"]
+                childOrderStrategies = position["childOrderStrategies"]
 
+            except:
+
+                continue
             x = 0
             trulycanceled = 0
             for order in childOrderStrategies:
