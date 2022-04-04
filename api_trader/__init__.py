@@ -101,8 +101,17 @@ class ApiTrader(Tasks, OrderBuilder, TDWebsocket):
                 f"NOT RUNNING TASKS FOR {self.user['Name']} ({modifiedAccountID(self.account_id)})\n", extra={'log': False})
 
         time.sleep(.5)  # SLEEPS FOR .5 SO THAT IT CAN STATE RUN_WEBSOCKET FIRST
+        if RUN_LIVE_TRADER:
+            live = 'LIVE'
+        else:
+            live = 'PAPER'
+        if RUN_TRADIER:
+            str_trader = 'TRADIER'
+        else:
+            str_trader = 'TDAMERITRADE'
+
         self.logger.info(
-            f"RUNNING {user['Accounts'][str(account_id)]['Account_Position'].upper()} TRADER ({modifiedAccountID(self.account_id)})\n")
+            f"RUNNING {str_trader} **{live}** TRADER ({modifiedAccountID(self.account_id)})\n")
 
     # STEP ONE
     @exception_handler

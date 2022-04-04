@@ -318,9 +318,14 @@ class Tasks:
 
                 else:
 
-                    self.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"], "Strategy": position["Strategy"]},
-                        {"$set": {f"childOrderStrategies.{order}.Order_Status": new_status}})
+                    if RUN_TRADIER:
+                        self.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"], "Strategy": position["Strategy"]},
+                            {"$set": {f"childOrderStrategies.{x}.Order_Status": new_status}})
 
+                    else:
+                        self.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"],
+                                                        "Strategy": position["Strategy"]},
+                                                       {"$set": {f"childOrderStrategies.{order}.Order_Status": new_status}})
                 x += 1
 
     @exception_handler
