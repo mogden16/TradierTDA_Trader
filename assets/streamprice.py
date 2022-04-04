@@ -123,7 +123,7 @@ def streamPrice(trader):
 
                 if RUN_TRADIER:
                     for i in range(0, 2):
-                        order = open_position['childOrderStrategies'][str(i)]
+                        order = open_position['childOrderStrategies'][i]
 
                         if 'Stop_Price' not in order:
                             continue
@@ -150,7 +150,7 @@ def streamPrice(trader):
                             }
 
                             if current_price > max_price:
-                                trader.open_positions.update_one({"_id": id}, {"$set": {'Max_Price': current_price}},
+                                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Max_Price': current_price}},
                                                                upsert=False)
 
                             if max_price < limits['target1']:
@@ -160,7 +160,7 @@ def streamPrice(trader):
                                                                upsert=True)
                                 trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
                                                                upsert=True)
-                                trader.tradier.modify_stopprice(id, stoploss_price)
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
 
                             elif limits['target1'] <= max_price < limits['target2']:
                                 target_price = limits['target2']
@@ -169,7 +169,7 @@ def streamPrice(trader):
                                                                upsert=True)
                                 trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
                                                                upsert=True)
-                                trader.tradier.modify_stopprice(id, stoploss_price)
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
 
                             elif limits['target2'] <= max_price < limits['target3']:
                                 target_price = limits['target3']
@@ -178,7 +178,7 @@ def streamPrice(trader):
                                                                upsert=True)
                                 trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
                                                                upsert=True)
-                                trader.tradier.modify_stopprice(id, stoploss_price)
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
 
                             elif limits['target3'] <= max_price < limits['target4']:
                                 target_price = limits['target4']
@@ -187,7 +187,7 @@ def streamPrice(trader):
                                                                upsert=True)
                                 trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
                                                                upsert=True)
-                                trader.tradier.modify_stopprice(id, stoploss_price)
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
 
                             elif limits['target4'] <= max_price < limits['target5']:
                                 target_price = limits['target5']
@@ -196,7 +196,7 @@ def streamPrice(trader):
                                                                upsert=True)
                                 trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
                                                                upsert=True)
-                                trader.tradier.modify_stopprice(id, stoploss_price)
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
 
                             elif limits['target5'] <= max_price < limits['target6']:
                                 target_price = limits['target6']
@@ -205,7 +205,7 @@ def streamPrice(trader):
                                                                upsert=True)
                                 trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'StopLoss_Price': stoploss_price}},
                                                                upsert=True)
-                                trader.tradier.modify_stopprice(id, stoploss_price)
+                                trader.tradier.modify_stopprice(stop_order_id, stoploss_price)
 
                             elif max_price >= limits['target6']:
                                 trailstop_price = round(max_price - trail_stop_value, 2)
@@ -218,7 +218,7 @@ def streamPrice(trader):
 
                             print(
                                 f'{pre_symbol}   TargetPrice {target_price}   currentPrice {current_price}   '
-                                f'entryPrice {entry_price}   stoplossPrice{stoploss_price}')
+                                f'entryPrice {entry_price}   stoplossPrice{stoploss_price} \n')
 
                 else:
 
@@ -326,7 +326,7 @@ def streamPrice(trader):
 
                             print(
                                 f'{pre_symbol}   TargetPrice {target_price}   currentPrice {current_price}   '
-                                f'entryPrice {entry_price}   stoplossPrice{stoploss_price}')
+                                f'entryPrice {entry_price}   stoplossPrice{stoploss_price} \n')
 
 
             #
@@ -500,42 +500,42 @@ def streamPrice(trader):
             #             f'{pre_symbol}   TARGETPrice {target_price}   currentPrice {current_price}   '
             #             f'entryPrice {entry_price}   stoplossPrice{stoploss_price}   '
             #             f'trailPrice {trailstop_price} \n')
+        #
+        # if order_type == "OCO" or order_type == "CUSTOM":
+        #     if current_price > entry_price:
+        #         print(f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
+        #               f'currentPrice {current_price}   entryPrice {entry_price}    '
+        #               f'stoplossPrice {stoploss_price} \n')
+        #
+        #     else:
+        #         print(f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
+        #               f'entryPrice {entry_price}   currentPrice {current_price}    '
+        #               f'stoplossPrice {stoploss_price} \n')
+        #
+        # elif order_type == "TRAIL":
+        #     if current_price > entry_price:
+        #         print(
+        #             f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
+        #             f'currentPrice {current_price}   entryPrice {entry_price}    '
+        #             f'trailstopPrice {trailstop_price}' '\n')
+        #     else:
+        #         print(
+        #             f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
+        #             f'entryPrice {entry_price}   currentPrice {current_price}    '
+        #             f'trailstopPrice {trailstop_price}' '\n')
+        #
+        # elif order_type == "CUSTOM2" and isRunner == "TRUE":
+        #     pass
 
-        if order_type == "OCO":
-            if current_price > entry_price:
-                print(f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
-                      f'currentPrice {current_price}   entryPrice {entry_price}    '
-                      f'stoplossPrice {stoploss_price} \n')
-
-            else:
-                print(f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
-                      f'entryPrice {entry_price}   currentPrice {current_price}    '
-                      f'stoplossPrice {stoploss_price} \n')
-
-        elif order_type == "TRAIL":
-            if current_price > entry_price:
-                print(
-                    f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
-                    f'currentPrice {current_price}   entryPrice {entry_price}    '
-                    f'trailstopPrice {trailstop_price}' '\n')
-            else:
-                print(
-                    f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
-                    f'entryPrice {entry_price}   currentPrice {current_price}    '
-                    f'trailstopPrice {trailstop_price}' '\n')
-
-        elif order_type == "CUSTOM2" and isRunner == "TRUE":
-            pass
-
-        else:
-            if current_price > entry_price:
-                print(
-                    f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
-                    f'currentPrice {current_price}   entryPrice {entry_price}    '
-                    f'trailstopPrice {trailstop_price}    stoplossPrice {stoploss_price}' '\n')
-
-            else:
-                print(
-                    f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
-                    f'entryPrice {entry_price}   currentPrice {current_price}    '
-                    f'trailstopPrice {trailstop_price}    stoplossPrice {stoploss_price}' '\n')
+        # else:
+        #     if current_price > entry_price:
+        #         print(
+        #             f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
+        #             f'currentPrice {current_price}   entryPrice {entry_price}    '
+        #             f'trailstopPrice {trailstop_price}    stoplossPrice {stoploss_price}' '\n')
+        #
+        #     else:
+        #         print(
+        #             f'{pre_symbol}   takeprofit_price {round(takeprofit_price, 2)}     '
+        #             f'entryPrice {entry_price}   currentPrice {current_price}    '
+        #             f'trailstopPrice {trailstop_price}    stoplossPrice {stoploss_price}' '\n')
