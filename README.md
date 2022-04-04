@@ -71,24 +71,25 @@ so you will still need to have ToS set up if you'd like to runWebsocket with Tra
 
 ---
 TRADING CRITERIA
+
 13. MIN_OPTIONPRICE: (Float) as you're scanning discord alerts, what's the minimum option price you'd like to potentially trade?
 14. MAX_OPTIONPRICE: (Float) what's the maximum price you'd like to trade?  *NOTE: THE POSITION SIZE MUST BE SET IN MONGO IN STRATEGIES*
 15. MIN_VOLUME: (Float) as you get alerts, python will send a request to TD API to get the price & volume of the option.  What's the minimum volume you want to trade?  You want to ensure that the contract is liquid
 16. MIN_DELTA: (Float) what's the minimum delta you'd like to trade? It takes absolute value
 17. GET_PRICE_FROM_TD: personal preference.  Do you want to get your price quotes from TD or Tradier?  Tradier is delayed for papertrading, so I always get price data from TD (True, False)
 18. BUY_PRICE: do you want to buy on the bidPrice, askPrice, lastPrice, mark? (string) I prefer to buy on bid, sell on ask
-19. SELL_PRICE = do you want to sell on the bidPrice, askPrice, lastPrice, mark? (string)
-20. MAX_QUEUE_LENGTH = (Float) a tasks has a KillQueueOrder function.  If an order is queued for longer than MAX_QUEUE_LENGTH, then it's cancelled
-21. TAKE_PROFIT_PERCENTAGE = (Float) If trading OCO or Custom, what would you like your Take_Profit set as?
+19. SELL_PRICE: do you want to sell on the bidPrice, askPrice, lastPrice, mark? (string)
+20. MAX_QUEUE_LENGTH: (Float) a tasks has a KillQueueOrder function.  If an order is queued for longer than MAX_QUEUE_LENGTH, then it's cancelled
+21. TAKE_PROFIT_PERCENTAGE: (Float) If trading OCO or Custom, what would you like your Take_Profit set as?
 - Entry_Price * (1+Take_Profit_Percentage) = Take_Profit_Price
-22. STOP_LOSS_PERCENTAGE = (Float) If trading OCO or Custom, what would you like your Stop_Loss set as?
+22. STOP_LOSS_PERCENTAGE: (Float) If trading OCO or Custom, what would you like your Stop_Loss set as?
 - Entry_Price * (1-Stop_Loss_Percentage) = Stop_Loss_Price
-23. TRAIL_STOP_PERCENTAGE = (Float) If trading Trail, it will set your trailing stop.
+23. TRAIL_STOP_PERCENTAGE: (Float) If trading Trail, it will set your trailing stop.
 - Entry_Price * TRAIL_STOP_PERCENTAGE = Trail_Stop_Value
 - Entry_Price - Trail_Stop_Value = Trail_Stop_Price
 - Please note that this trail stop is not 100% developed yet (Traider does NOT have a trailing stop order, so the websocket will constantly update a closing order)
-24. RUNNER_FACTOR = (Float) this is currently *not* being used. It used to enter a new order of RUNNER_FACTOR * position_size after an order hits take_profit_price
-25. TRADE_MULTI_STRIKES = do you want to trade multiple strikes of the same options?  TD sometimes sends gmails of 3 separate strikes in one email.  If you don't want to trade these, it should be False (True, False)
+24. RUNNER_FACTOR: (Float) this is currently *not* being used. It used to enter a new order of RUNNER_FACTOR * position_size after an order hits take_profit_price
+25. TRADE_MULTI_STRIKES: do you want to trade multiple strikes of the same options?  TD sometimes sends gmails of 3 separate strikes in one email.  If you don't want to trade these, it should be False (True, False)
 
 ---
 TECHNICAL ANALYSIS
@@ -112,20 +113,20 @@ DISCORD
 36. DISCORD_WEBHOOK: (string) personal discord webhook (this is how I get alerts instead of Pushsafer)
 ---
 TRADIER
+* Tradier API is very easy to work with.  It just needs the specific Access Token & Account Number to trade via Paper or Live
 37. LIVE_ACCESS_TOKEN: (string) this will be your live trading access-token from Tradier website
 38. LIVE_ACCOUNT_NUMBER: (string) this will be your live trading account-number from Tradier
-* Tradier API is very easy to work with.  It just needs the specific Access Token & Account Number to trade via Paper or Live
 39. SANDBOX_ACCESS_TOKEN: (string) on Tradier website (this is papertrading) - 15m delayed
 40. SANDBOX_ACCOUNT_NUMBER: (string) on Tradier website (this is papetrading) - 15m delayed 
 ___
  BACKTESTER
 * This is how to backtest your strategy - it's currently a work in progress
-POLYGON_URI: (string) - sign up for Polygon to get free PolygonAPI access - we use it for option price history (only 5 API requests per min for a free account, so it sleeps every 14 mins when grabbing a dataframe) 
-EXT_DIR: (string) this is the root folder of your code (where main.py is located)
-LOOKBACK_DAYS: (float) amount of day lookback from current UCT time to backtest (max discord alerts is 50 alerts due to json requests)
-TEST_DISCORD: (True, False) if you'd like to backtest discord alerts, set to True
-TEST_CLOSED_POSITIONS: (True, False) if you'd like to backtest mongo closed_positions, set to True
-POSITION_SIZE: (float) what's your assumed position size for each trade?  If option entry_price exceeds position size, it doesn't trade
+41. POLYGON_URI: (string) - sign up for Polygon to get free PolygonAPI access - we use it for option price history (only 5 API requests per min for a free account, so it sleeps every 14 mins when grabbing a dataframe) 
+42. EXT_DIR: (string) this is the root folder of your code (where main.py is located)
+43. LOOKBACK_DAYS: (float) amount of day lookback from current UCT time to backtest (max discord alerts is 50 alerts due to json requests)
+44. TEST_DISCORD: (True, False) if you'd like to backtest discord alerts, set to True
+45. TEST_CLOSED_POSITIONS: (True, False) if you'd like to backtest mongo closed_positions, set to True
+46. POSITION_SIZE: (float) what's your assumed position size for each trade?  If option entry_price exceeds position size, it doesn't trade
 ___
 
 - **ATTENTION** - The bot is designed to either paper trade or live trade, but not at the same time. You can do one or the other. This can be changed by: TD --> the value set for the "Account_Position" field located in your account object stored in the users collection in mongo. The options for this field are "Paper" and "Live". These are case sensitive. By default when the account is created, it is set to "Paper" as a safety precaution for the user.  TRADIER --> switch your RUN_LIVE_TRADER in config.py to True
@@ -176,8 +177,7 @@ ___
 2. Create a scanner and name it using the format below:
 
    - STRATEGY, SIDE
-
-   - Example: ![Scanner Name Format](https://tos-python-trading-bot.s3.us-east-2.amazonaws.com/img/Scanner_Name_Format.PNG)
+   
 
    1. REVA is the strategy name example.
    2. BUY is the side. Can be BUY, BUY_TO_OPEN, BUY_TO_CLOSE, SELL, SELL_TO_CLOSE, SELL_TO_OPEN
