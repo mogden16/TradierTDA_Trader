@@ -333,21 +333,21 @@ class Main:
 
         while connected:
 
-            """THIS RUNS THE TD INSTANCE"""
+            """  THIS RUNS THE TD INSTANCE  """
             self.setupTraders()
 
-            """THIS WILL COMPILE THE ALERTS FROM DISCORD & GMAIL"""
+            """  THIS WILL COMPILE THE ALERTS FROM DISCORD & GMAIL  """
             trade_alerts = self.get_alerts(start_time)
 
-            """THIS WILL PUT ALL ALERTS INTO C.OPTIONLIST TO BE TRADED"""
+            """  THIS WILL PUT ALL ALERTS INTO C.OPTIONLIST TO BE TRADED  """
             self.set_alerts(trade_alerts)
 
-            """CHECK THE TIME"""
+            """  CHECK THE TIME  """
             current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
             day = datetime.now(pytz.timezone(TIMEZONE)).strftime('%a')
             weekends = ["Sat", "Sun"]
 
-            """SELL OUT OF ALL POSITIONS AT SELL_ALL_POSITION TIME"""
+            """  SELL OUT OF ALL POSITIONS AT SELL_ALL_POSITION TIME  """
             if DAY_TRADE:
                 if SHUTDOWN_TIME > current_time > SELL_ALL_POSITIONS:
                     print("Shutdown time has passed, all positions now CLOSING")
@@ -356,7 +356,7 @@ class Main:
                     for open_position in open_positions:
                         self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
 
-            """ONCE MARKET IS CLOSED CLOSED, CLOSE ALL CONNECTIONS TO MONGO"""
+            """  ONCE MARKET IS CLOSED CLOSED, CLOSE ALL CONNECTIONS TO MONGO  """
             if current_time >= SHUTDOWN_TIME:
                 disconnect = mongo_helpers.disconnect(self)
                 if disconnect:
@@ -369,7 +369,7 @@ class Main:
 
             elif config.RUN_TA:
 
-                """ALL ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA"""
+                """  ALL ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA  """
                 for api_trader in self.traders.values():
 
                     for value in c.OPTIONLIST:
@@ -377,7 +377,7 @@ class Main:
                         signals = techanalysis.get_TA(value, api_trader)
                         buy_signal = techanalysis.buy_criteria(signals)
 
-                        """IF BUY SIGNAL == TRUE THEN BUY!"""
+                        """  IF BUY SIGNAL == TRUE THEN BUY!  """
                         if buy_signal:
                             self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
                             c.DONTTRADELIST.append(value)
@@ -400,12 +400,13 @@ class Main:
                 for api_trader in self.traders.values():
                     api_trader.updateStatus()
 
-            """USE WEBSOCKET TO PRINT CURRENT PRICES - IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT"""
+            """  USE WEBSOCKET TO PRINT CURRENT PRICES - 
+            IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT  """
             if RUN_WEBSOCKET:
                 streamprice.streamPrice(self)
 
-            """THIS KEEPS TRACK OF ANY TIME THE API GETS AN ERROR. 
-            IF ERRORS ARE > 10, YOU MIGHT WANT TO CHECK OUT YOUR REQUESTS"""
+            """  THIS KEEPS TRACK OF ANY TIME THE API GETS AN ERROR. 
+            IF ERRORS ARE > 10, YOU MIGHT WANT TO CHECK OUT YOUR REQUESTS  """
             if self.error > 0:
                 print(f'errors: {self.error}')
 
