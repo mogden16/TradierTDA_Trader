@@ -93,12 +93,14 @@ TRADING CRITERIA
 
 ---
 TECHNICAL ANALYSIS
+
 26. RUN_TA: runs QQE & HULL_MOVING_AVG for alerts in the 10m timeframe (True, False)
 27. RUN_30M_TA: Runs QQE & HULL_MOVING_AVG for alerts in the 30m timeframe (True, False)
 * If both are true, then the 10m and 30m timeframes are in agreement with your indicators (puts & calls have separate criteria)
 
 ---
 TD STREAMING
+
 28. API_KEY, REDIRECT_URI, TOKEN_PATH: (string) please watch Part Time Larry's video to get a separate API_KEY for your account.  You will need to create a new TD Developer account for this
 29. ACCOUNT_ID: (float) This is the TD account you'd like to trade with
 30. HEARTBEAT_SETTING: (float) in seconds, how often would you like a "heartbeat signal" from the websocket task incase you don't have any open positions, it will show that your streamer is still working
@@ -106,6 +108,7 @@ TD STREAMING
 
 ---
 DISCORD
+
 32. CHANNELID: (string) channel ID for discord alert channel
 33. DISCORD_AUTH: (string) authorization for discord alert channel
 34. DISCORD_USER: (string) username of discord alert bot
@@ -113,6 +116,7 @@ DISCORD
 36. DISCORD_WEBHOOK: (string) personal discord webhook (this is how I get alerts instead of Pushsafer)
 ---
 TRADIER
+
 * Tradier API is very easy to work with.  It just needs the specific Access Token & Account Number to trade via Paper or Live
 37. LIVE_ACCESS_TOKEN: (string) this will be your live trading access-token from Tradier website
 38. LIVE_ACCOUNT_NUMBER: (string) this will be your live trading account-number from Tradier
@@ -120,6 +124,7 @@ TRADIER
 40. SANDBOX_ACCOUNT_NUMBER: (string) on Tradier website (this is papetrading) - 15m delayed 
 ___
  BACKTESTER
+
 * This is how to backtest your strategy - it's currently a work in progress
 41. POLYGON_URI: (string) - sign up for Polygon to get free PolygonAPI access - we use it for option price history (only 5 API requests per min for a free account, so it sleeps every 14 mins when grabbing a dataframe) 
 42. EXT_DIR: (string) this is the root folder of your code (where main.py is located)
