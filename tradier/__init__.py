@@ -168,6 +168,10 @@ class TradierTrader(tradierOrderBuilder):
                                 data={'stop': str(price)},
                                 headers=self.headers
                                 )
+        if response.status_code not in [200, 201]:
+            print(f'bad response {order_id}')
+            return
+
         json_response = response.json()
         return json_response
 

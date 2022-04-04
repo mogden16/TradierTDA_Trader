@@ -3,33 +3,16 @@
 ## Description
 
 - This automated trading bot utilitizes, TDameritrade API, TD Websocket API, Tradier API, Gmail API, Discord integration and MongoDB.
+- It's intended to be a "plug & play" type of bot for newbies to get invovled with Algo trading.
+- You, the user, will have to create the alert system so the bot can trade these signals.
 
-## Table Of Contents
 
-- [How it works](#how-it-works)
-
-- [Getting Started](#getting-started)
-
-  - [Dependencies](#dependencies)
-  - [Thinkorswim](#thinkorswim)
-  - [TDA API Tokens](#tda-tokens)
-  - [Gmail](#gmail)
-  - [MongoDB](#mongo)
-  - [Pushsafer](#pushsafer)
-
-- [Discrepencies](#discrepencies)
-
-- [What I Use and Costs](#what-i-use-and-costs)
-
-- [Code Counter](#code-counter)
-
-- [Final Thoughts and Support](#final-thoughts-and-support)
-
-## <a name="how-it-works"></a> How it works (in a nutshell)
+## <a name="how-it-works"></a> How it works (in its simplest terms)
 
 - There are many ways to run this bot:
   - BROKER
     - You can specify your broker (TD or Tradier and can be changed via config.py)
+    - TD has a better paper trading set up, but Tradier is $10/mo subscription with free options trading
   - ALERTS
     - You can run it using Trey Thomas's way of using TD API to scan alerts (gmail alerts)
     - You can run it scanning discord notifications
@@ -41,37 +24,109 @@
 * To assist in getting your websocket set up, I recommend watching this video: (Part Time Larry - TD Websocket) https://www.youtube.com/watch?v=P5YanfJFlNs
 ### **Thinkorswim**
 
-1. Develop strategies in Thinkorswim.
-2. Create a scanner for your strategy. (Scanner name will have specific format needed)
-3. Set your scanner to send alerts to your non-personal gmail.
-4. When a symbol is populated into the scanner with "buy" or "buy_to_open", an alert is triggered and sent to gmail.
+Thinkorswim can be used as a broker for LiveTrading or Papertrading OR it can just be used to send your bot buy signals.  The Papertrading
+feature of this bot WILL NOT show up in your papertrading account in ToS, but MongoDB can be set up to visually show your paper trading.
+ToS is better than Traider with papertrading because Tradier data is DELAYED for 15m when not live trading.
+
+1. IN ORDER TO TRADE THINKORSWIM, IN CONFIG.PY  --> RUN_TRADIER = False
+2. IN ORDER TO TRADE PAPERTRADER, IN CONFIG.PY --> RUN_LIVE_TRADER = FALSE
+3. If you want alerts coming from ThinkorSwim, you can set up an OptionHacker alert to send emails to an email you created.
+4. Create a scanner for your strategy. (Scanner name will have specific format needed)
+5. Set your scanner to send alerts to your non-personal gmail.
+6. When a symbol is populated into the scanner with "buy" or "buy_to_open", an alert is triggered and sent to gmail.
+7. If you're unfamilar with Trey's repo, please check this out.  This is what the repo this code has been modeled after:
+https://github.com/TreyThomas93/python-trading-bot-with-thinkorswim
 
 ### **Discord**
 
 1. I personally use https://www.teklutrades.com/FlowAnalysis, I couldn't recommend his work enough.
 2. It's $40/month but the alerts are formatted well.
+3. If you have your own discord that you'd like to track alerts with, you'll have to format your own discord scanner and throw it in the discord folder.
+You can replace discord_scanner.py with your own.  If you don't have a discord_scanner, you can set RUN_DISCORD = False
 
 ### **Trading Bot (Python)**
 
 1. Continuously scrapes email inbox/discord looking for alerts.
 2. Once found, bot will extract needed information and will run TA (if you have RUN_TA set to True in your config.py).
 
+
+## HOW TO SET UP config.py ##
+1. Create a copy of config.py.example and save it as config.py. Place it in the root of this folder (next to config.py.example)
+2. RUN_LIVE_TRADER: change to True if you want to trade using real money (True, False)
+3. RUN_TRADIER: change to True if you want to trade using Tradier as your broker (True, False) - the websocket is still ToS based,
+so you will still need to have ToS set up if you'd like to runWebsocket with Tradier
+4. IS_TESTING: this might not work... it's intended to provide prices when the market is closed to make sure everything is still working in Mongo (True, False)
+5. TRADE_HEDGES: only changes the alerts from my discord_scanner (True, False).  TekluTrades indicates when it thinks a flow might be a hedge.  If you aren't using this flow, it won't affect your trading.  If you are using this flow and would like to trade when there's a Hedge Alert flow, set to True
+6. MONGO_URI: your Mongo_URI (string) - (see Trey's repo if necessary)
+7. RUN_GMAIL & RUN_DISCORD: how do you want to get your alerts?  Set to True for the alerts you'd like (True, False)
+8. PUSH_API_KEY: I use a free discord webhook to a personal discord channel, but this is possible too (string) [commented out]
+9. TIMEZONE: use a pytz timezone (string) https://gist.github.com/heyalexej/8bf688fd67d7199be4a1682b3eec7568
+10. RUN_TASKS: this runs on a totally separate python thread.  I suggest having it set to True (True, False).  Functions can be found in assets -> tasks.py
+11. RUN_WEBSOCKET: this will actively stream all open_posiitons in mongo with pricing and update it to mongo (True, False) - personal preference, I have it on
+12. TURN_ON_TIME, TURN_OFF_TRADES, SELL_ALL_POSITIONS, SHUTDOWN_TIME: ('HH:MM:SS')
+- TURN_ON_TIME - not set up currently, when you'd like to start the mongo connection and boot up the bot
+- TURN_OFF_TRADES - at what time would you like to stop accepting trades ('15:50:00') (ie. 10mins before close)
+- SELL_ALL_POSITIONS - at what time would you like to start selling all positions?
+- SHUTDOWN_TIME - at what time would you like to disconnect from Mongo?  *MONGO CHARGES BASED OFF THE HOUR, NOT NUMBER OF CONNECTIONS, SO IT'S BEST TO SHUT THE CONNECTION ONCE MARKET IS CLOSED
+
 ---
+TRADING CRITERIA
+13. MIN_OPTIONPRICE: (Float) as you're scanning discord alerts, what's the minimum option price you'd like to potentially trade?
+14. MAX_OPTIONPRICE: (Float) what's the maximum price you'd like to trade?  *NOTE: THE POSITION SIZE MUST BE SET IN MONGO IN STRATEGIES*
+15. MIN_VOLUME: (Float) as you get alerts, python will send a request to TD API to get the price & volume of the option.  What's the minimum volume you want to trade?  You want to ensure that the contract is liquid
+16. MIN_DELTA: (Float) what's the minimum delta you'd like to trade? It takes absolute value
+17. GET_PRICE_FROM_TD: personal preference.  Do you want to get your price quotes from TD or Tradier?  Tradier is delayed for papertrading, so I always get price data from TD (True, False)
+18. BUY_PRICE: do you want to buy on the bidPrice, askPrice, lastPrice, mark? (string) I prefer to buy on bid, sell on ask
+19. SELL_PRICE = do you want to sell on the bidPrice, askPrice, lastPrice, mark? (string)
+20. MAX_QUEUE_LENGTH = (Float) a tasks has a KillQueueOrder function.  If an order is queued for longer than MAX_QUEUE_LENGTH, then it's cancelled
+21. TAKE_PROFIT_PERCENTAGE = (Float) If trading OCO or Custom, what would you like your Take_Profit set as?
+- Entry_Price * (1+Take_Profit_Percentage) = Take_Profit_Price
+22. STOP_LOSS_PERCENTAGE = (Float) If trading OCO or Custom, what would you like your Stop_Loss set as?
+- Entry_Price * (1-Stop_Loss_Percentage) = Stop_Loss_Price
+23. TRAIL_STOP_PERCENTAGE = (Float) If trading Trail, it will set your trailing stop.
+- Entry_Price * TRAIL_STOP_PERCENTAGE = Trail_Stop_Value
+- Entry_Price - Trail_Stop_Value = Trail_Stop_Price
+- Please note that this trail stop is not 100% developed yet (Traider does NOT have a trailing stop order, so the websocket will constantly update a closing order)
+24. RUNNER_FACTOR = (Float) this is currently *not* being used. It used to enter a new order of RUNNER_FACTOR * position_size after an order hits take_profit_price
+25. TRADE_MULTI_STRIKES = do you want to trade multiple strikes of the same options?  TD sometimes sends gmails of 3 separate strikes in one email.  If you don't want to trade these, it should be False (True, False)
 
-- You can only buy a symbol once per strategy, but you can buy the same symbol on multiple strategies.
+---
+TECHNICAL ANALYSIS
+26. RUN_TA: runs QQE & HULL_MOVING_AVG for alerts in the 10m timeframe (True, False)
+27. RUN_30M_TA: Runs QQE & HULL_MOVING_AVG for alerts in the 30m timeframe (True, False)
+* If both are true, then the 10m and 30m timeframes are in agreement with your indicators (puts & calls have separate criteria)
 
-- For Example:
+---
+TD STREAMING
+28. API_KEY, REDIRECT_URI, TOKEN_PATH: (string) please watch Part Time Larry's video to get a separate API_KEY for your account.  You will need to create a new TD Developer account for this
+29. ACCOUNT_ID: (float) This is the TD account you'd like to trade with
+30. HEARTBEAT_SETTING: (float) in seconds, how often would you like a "heartbeat signal" from the websocket task incase you don't have any open positions, it will show that your streamer is still working
+31. STREAMPRICE_LINK: (string) in streamprice.py, would you like to trade out of a signal based on 'bid', 'ask', 'last'? I prefer ask price
 
-  1. You place a buy order for AAPL with the strategy name MyRSIStrategy. Once the order is placed and filled, it is pushed to mongo.
-  2. If another alert is triggered for AAPL with the strategy name of MyRSIStrategy, the bot will reject it because it's already an open position.
-  3. Once the position is removed via a sell order, then AAPL with the strategy name of MyRSIStrategy can be bought again.
-
-- This bot is setup for both Standard orders and OCO orders.
-
-  1. Standard Orders - basic buy and sell order flow.
-  2. OCO orders - single entry price with two exit prices (Stop Loss/Take Profit)
-
-- For the OCO orders, the bot uses a task to check your TDA account to see if any OCO exits have triggered.
+---
+DISCORD
+32. CHANNELID: (string) channel ID for discord alert channel
+33. DISCORD_AUTH: (string) authorization for discord alert channel
+34. DISCORD_USER: (string) username of discord alert bot
+35. STRATEGY: (string) what do you want to name your strategy coming from discord alerts
+36. DISCORD_WEBHOOK: (string) personal discord webhook (this is how I get alerts instead of Pushsafer)
+---
+TRADIER
+37. LIVE_ACCESS_TOKEN: (string) this will be your live trading access-token from Tradier website
+38. LIVE_ACCOUNT_NUMBER: (string) this will be your live trading account-number from Tradier
+* Tradier API is very easy to work with.  It just needs the specific Access Token & Account Number to trade via Paper or Live
+39. SANDBOX_ACCESS_TOKEN: (string) on Tradier website (this is papertrading) - 15m delayed
+40. SANDBOX_ACCOUNT_NUMBER: (string) on Tradier website (this is papetrading) - 15m delayed 
+___
+ BACKTESTER
+* This is how to backtest your strategy - it's currently a work in progress
+POLYGON_URI: (string) - sign up for Polygon to get free PolygonAPI access - we use it for option price history (only 5 API requests per min for a free account, so it sleeps every 14 mins when grabbing a dataframe) 
+EXT_DIR: (string) this is the root folder of your code (where main.py is located)
+LOOKBACK_DAYS: (float) amount of day lookback from current UCT time to backtest (max discord alerts is 50 alerts due to json requests)
+TEST_DISCORD: (True, False) if you'd like to backtest discord alerts, set to True
+TEST_CLOSED_POSITIONS: (True, False) if you'd like to backtest mongo closed_positions, set to True
+POSITION_SIZE: (float) what's your assumed position size for each trade?  If option entry_price exceeds position size, it doesn't trade
+___
 
 - **ATTENTION** - The bot is designed to either paper trade or live trade, but not at the same time. You can do one or the other. This can be changed by: TD --> the value set for the "Account_Position" field located in your account object stored in the users collection in mongo. The options for this field are "Paper" and "Live". These are case sensitive. By default when the account is created, it is set to "Paper" as a safety precaution for the user.  TRADIER --> switch your RUN_LIVE_TRADER in config.py to True
 
@@ -100,6 +155,10 @@
 - pytz = "\*"
 - psutil = "\*"
 - certifi = "\*"
+- polygon = "\*"
+- pyti = "\*"
+- pandas = "\*"
+- pandas_ta = "\*"
 
 > [venv]
 
@@ -137,13 +196,9 @@
 
    - This is how an entry strategy in the charts may look.
 
-   - ![Chart Strategy Example](https://tos-python-trading-bot.s3.us-east-2.amazonaws.com/img/Chart_Strategy.PNG)
-
    ***
 
    - This is how the scanner should look for the exact same entry strategy.
-
-   - ![Scanner Strategy Example](https://tos-python-trading-bot.s3.us-east-2.amazonaws.com/img/Scanner_Strategy.PNG)
 
    - The only thing that changed was that [1] was added to offset the scanner by one and to look at the previous candle.
 
@@ -151,13 +206,12 @@
 
 4. Set up the alert for the scanner. View images below:
 
-   - ![Create Alert Screen 1](https://tos-python-trading-bot.s3.us-east-2.amazonaws.com/img/Create_Alert_Screen.PNG)
    - Set Event dropdown to "A symbol is added"
 
-   - ![Create Alert Screen 1](https://tos-python-trading-bot.s3.us-east-2.amazonaws.com/img/Create_Alert_Screen2.PNG)
+
    - Check the box that says "Send an e-mail to all specified e-mail addresses"
 
-   - ![Create Alert Screen 1](https://tos-python-trading-bot.s3.us-east-2.amazonaws.com/img/Create_Alert_Screen3.PNG)
+
    - Check the radio button thats says "A message for every change"
 
 ---
@@ -206,7 +260,7 @@
 
 - The collections you will find in the Api_Trader database will be the following:
 
-1. analysis
+1. analysis (THIS IS WHERE THE DISCORD ALERTS GO AFTER THEY'RE SCANNED TO AVOID RE-TRADING)
 2. users
 3. queue
 4. open_positions
@@ -280,7 +334,6 @@
 - MongoDB Atlas -- Approx. $25 / month.
 - I currently use the M5 tier. You may be able to do the M2 tier. If you wont be using the web app then you don't need a higher level tier.
 
-![Mongo Tiers](https://tos-python-trading-bot.s3.us-east-2.amazonaws.com/img/cluster-tier.png)
 
 > NOTIFICATION SYSTEM
 
