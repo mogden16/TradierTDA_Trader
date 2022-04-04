@@ -67,27 +67,3 @@ class MongoDB:
 
             return False
 
-    # def disconnect(self):
-    #
-    #     try:
-    #
-    #         self.logger.info("DISCONNECTING FROM MONGO...", extra={'log': False})
-    #
-    #         if MONGO_URI != None:
-    #
-    #             self.client = MongoClient(
-    #                 MONGO_URI, authSource="admin", tlsCAFile=ca)
-    #
-    #             self.client.close()
-    #
-    #             return False
-    #
-    #         else:
-    #
-    #             raise Exception("MISSING MONGO URI")
-    #
-    #     except Exception as e:
-    #
-    #         self.logger.error(f"FAILED TO CONNECT TO MONGO! - {e}")
-    #
-    #         return False

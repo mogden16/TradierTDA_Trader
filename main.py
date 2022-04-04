@@ -7,12 +7,13 @@ import config
 from datetime import datetime
 import pytz
 import constants as c
+import vectorbt as vbt
 
 from api_trader import ApiTrader
 from tdameritrade import TDAmeritrade
 from gmail import Gmail
-from mongo import MongoDB
-from tradier import TradierTrader, tradier_helpers
+from mongo import MongoDB, mongo_helpers
+from tradier import TradierTrader
 
 from assets import pushsafer, helper_functions, techanalysis, streamprice
 from assets.exception_handler import exception_handler
@@ -21,6 +22,7 @@ from assets.multifilehandler import MultiFileHandler
 from discord import discord_helpers, discord_scanner
 from backtest import backtest
 
+DAY_TRADE = config.DAY_TRADE
 RUN_TRADIER = config.RUN_TRADIER
 RUN_DISCORD = config.RUN_DISCORD
 RUN_GMAIL = config.RUN_GMAIL
@@ -31,6 +33,7 @@ RUN_WEBSOCKET = config.RUN_WEBSOCKET
 TIMEZONE = config.TIMEZONE
 TURN_OFF_TRADES = config.TURN_OFF_TRADES
 SELL_ALL_POSITIONS = config.SELL_ALL_POSITIONS
+SHUTDOWN_TIME = config.SHUTDOWN_TIME
 
 class Main:
 
@@ -137,77 +140,6 @@ class Main:
             except Exception as e:
 
                 logging.error(e)
-
-    def get_mongo_openPositions(self):
-        col = self.mongo.open_positions
-        llist = list(col.find({}))
-        return llist
-    def get_mongo_closedPositions(self):
-        col = self.mongo.closed_positions
-        llist = list(col.find({}))
-        return llist
-    def get_mongo_analysisPositions(self):
-        col = self.mongo.analysis
-        llist = list(col.find({}))
-        return llist
-    def get_mongo_users(self):
-        col = self.mongo.users
-        llist = list(col.find({}))
-        return llist
-    def get_mongo_queue(self):
-        col = self.mongo.queue
-        llist = list(col.find({}))
-        return llist
-
-    def set_mongo_openPositions(self, obj):
-        col = self.mongo.open_positions
-        inst = col.insert_one(obj)
-        return
-    def set_mongo_closedPosition(self, obj):
-        col = self.mongo.closed_positions
-        inst = col.insert_one(obj)
-        return
-    def set_mongo_analysisPosition(self, obj):
-        col = self.mongo.analysis
-        inst = col.insert_one(obj)
-        return
-    def set_mongo_user(self, obj):
-        col = self.mongo.users
-        inst = col.insert_one(obj)
-        return
-    def set_mongo_queue(self, obj):
-        col = self.mongo.queue
-        inst = col.insert_one(obj)
-        return
-
-    def find_mongo_openPosition(self, trade_symbol, timestamp):
-        col = self.mongo.open_positions
-        position = col.find_one({"Pre_Symbol": trade_symbol, "Entry_Date": timestamp})
-        if position != None:
-            return True
-        else:
-            return False
-    def find_mongo_closedPosition(self, trade_symbol, timestamp):
-        col = self.mongo.closed_positions
-        position = col.find_one({"Pre_Symbol": trade_symbol, "Entry_Date": timestamp})
-        if position != None:
-            return True
-        else:
-            return False
-    def find_mongo_analysisPosition(self, trade_symbol, timestamp):
-        col = self.mongo.analysis
-        position = col.find_one({"Pre_Symbol": trade_symbol, "Entry_Date": timestamp})
-        if position != None:
-            return True
-        else:
-            return False
-    def find_mongo_queue(self, trade_symbol, timestamp):
-        col = self.mongo.queue
-        position = col.find_one({"Pre_Symbol": trade_symbol, "Entry_Date": timestamp})
-        if position != None:
-            return True
-        else:
-            return False
 
     def get_alerts(self, start_time):
         """ METHOD RUNS THE DISCORD ALERT AND/OR GMAIL ALERT AT EACH INSTANCE.
@@ -393,7 +325,7 @@ class Main:
                 for trade_data in temp_trade_data:
                     self.tradier.runTrader(mongo_trader, trade_data)
 
-    def run(self):
+    def runTradingPlatform(self):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
         """
 
@@ -417,12 +349,21 @@ class Main:
             day = datetime.now(pytz.timezone(TIMEZONE)).strftime('%a')
             weekends = ["Sat", "Sun"]
 
-            if current_time > SELL_ALL_POSITIONS:
-                print("Shutdown time has passed, all positions now CLOSING")
-                self.tradier.cancelALLorders()
-                open_positions = self.get_mongo_openPositions()
-                for open_position in open_positions:
-                    self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
+            """SELL OUT OF ALL POSITIONS AT SELL_ALL_POSITION TIME"""
+            if DAY_TRADE:
+                if SHUTDOWN_TIME > current_time > SELL_ALL_POSITIONS:
+                    print("Shutdown time has passed, all positions now CLOSING")
+                    self.tradier.cancelALLorders()
+                    open_positions = mongo_helpers.get_mongo_openPositions(self)
+                    for open_position in open_positions:
+                        self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
+
+            """ONCE MARKET IS CLOSED CLOSED, CLOSE ALL CONNECTIONS TO MONGO"""
+            if current_time >= SHUTDOWN_TIME:
+                disconnect = mongo_helpers.disconnect(self)
+                if disconnect:
+                    connected = False
+                    break
 
             if current_time > TURN_OFF_TRADES:
                 print(f'It is {TURN_OFF_TRADES}, closing all queued trades')
@@ -458,14 +399,14 @@ class Main:
             if RUN_TRADIER:
                 self.tradier.updateStatus()
             else:
-                for api_trader in main.traders.values():
+                for api_trader in self.traders.values():
                     api_trader.updateStatus()
 
             if RUN_WEBSOCKET:
                 streamprice.streamPrice(self)
 
-            if main.error > 0:
-                print('errors', main.error)
+            if self.error > 0:
+                print(f'errors: {self.error}')
 
             time.sleep(helper_functions.selectSleep())
 
@@ -477,11 +418,7 @@ if __name__ == "__main__":
 
     main = Main()
 
-    main.run()
-
-    backtest.run(main)
-
-
+    main.runTradingPlatform()
 
 
 

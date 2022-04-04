@@ -96,6 +96,7 @@ def grabDataframes():
     end_date = datetime.now()
     start_date = end_date - lookback
 
+    x = 0
     for alert in tqdm(BACKTESTLIST):
         timestamp = alert['Entry_Date']
 
