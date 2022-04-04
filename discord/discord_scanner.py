@@ -61,7 +61,7 @@ def discord_messages(start_time, mins):
                         statement.remove("")
                     if statement[1] == ",":
                         statement.remove(",")
-                    symbol = statement[0]
+                    symbol = statement[0].upper()
                     str_month = statement[1]
                     datetime_month_object = datetime.strptime(str_month, '%b')
                     exp_month = '%02d' % datetime_month_object.month

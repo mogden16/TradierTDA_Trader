@@ -151,7 +151,7 @@ class Main:
             discord_alerts = discord_scanner.discord_messages(start_time, mins=3)
             if discord_alerts != None:
                 for alert in discord_alerts:
-                    position = self.find_mongo_analysisPosition(alert['Pre_Symbol'], alert['Entry_Date'])
+                    position = mongo_helpers.find_mongo_analysisPosition(self, alert['Pre_Symbol'], alert['Entry_Date'])
                     if position != True:
                         trade_alerts.append(alert)
 
@@ -160,7 +160,7 @@ class Main:
             gmail_alerts = helper_functions.formatGmailAlerts(gmail_alerts)
             if gmail_alerts != None:
                 for alert in gmail_alerts:
-                    position = self.find_mongo_analysisPosition(alert['Pre_Symbol'], alert['Entry_Date'])
+                    position = mongo_helpers.find_mongo_analysisPosition(self, alert['Pre_Symbol'], alert['Entry_Date'])
                     if position != True:
                         trade_alerts.append(alert)
 
@@ -212,7 +212,7 @@ class Main:
                     alert['Open_Interest'] = oi
                     alert['Volume'] = volume
                     alert['Entry_Price'] = bid
-                    self.set_mongo_analysisPosition(alert)
+                    mongo_helpers.set_mongo_analysisPosition(self, alert)
 
             else:
 
