@@ -107,8 +107,9 @@ def disconnect(trader):
     try:
         trader.logger.info("DISCONNECTING FROM MONGO...", extra={'log': False})
         trader.mongo.client.close()
+        trader.logger.info("DISCONNECTED FROM MONGO", extra={'log': False})
         return True
 
     except Exception as e:
-        trader.logger.error(f"FAILED TO CONNECT TO MONGO! - {e}")
+        trader.logger.error(f"FAILED TO DISCONNECT FROM MONGO! - {e}")
         return False

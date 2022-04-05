@@ -34,10 +34,12 @@ TRADE_HEDGES = config.TRADE_HEDGES
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 RUN_WEBSOCKET = config.RUN_WEBSOCKET
 TIMEZONE = config.TIMEZONE
+TURN_ON_TIME = config.TURN_ON_TIME
 TURN_OFF_TRADES = config.TURN_OFF_TRADES
 SELL_ALL_POSITIONS = config.SELL_ALL_POSITIONS
 SHUTDOWN_TIME = config.SHUTDOWN_TIME
 RUN_TASKS = config.RUN_TASKS
+RUN_BACKTEST_TIME = config.RUN_BACKTEST_TIME
 
 class Main(Tasks, TDWebsocket):
 
@@ -143,10 +145,10 @@ class Main(Tasks, TDWebsocket):
                             time.sleep(0.1)
 
                             if RUN_TASKS:
-                                Thread(target=self.runTasks, daemon=True).start()
+                                Thread(target=self.runTasks, daemon=False).start()
 
                             if RUN_WEBSOCKET:
-                                Thread(target=self.runWebsocket, daemon=True).start()
+                                Thread(target=self.runWebsocket, daemon=False).start()
 
                             if not RUN_WEBSOCKET and not RUN_TASKS:
                                 self.logger.info(
@@ -171,7 +173,7 @@ class Main(Tasks, TDWebsocket):
 
         trade_alerts = []
         if RUN_DISCORD:
-            discord_alerts = discord_scanner.discord_messages(start_time, mins=3)
+            discord_alerts = discord_scanner.discord_messages(start_time, mins=1)
             if discord_alerts != None:
                 for alert in discord_alerts:
                     position = mongo_helpers.find_mongo_analysisPosition(self, alert['Pre_Symbol'], alert['Entry_Date'])
@@ -367,20 +369,21 @@ class Main(Tasks, TDWebsocket):
 
             """  CHECK THE TIME  """
             current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
-            day = datetime.now(pytz.timezone(TIMEZONE)).strftime('%a')
-            weekends = ["Sat", "Sun"]
 
             """  SELL OUT OF ALL POSITIONS AT SELL_ALL_POSITION TIME  """
             if DAY_TRADE:
                 if SHUTDOWN_TIME > current_time > SELL_ALL_POSITIONS:
                     print("Shutdown time has passed, all positions now CLOSING")
-                    self.tradier.cancelALLorders()
+                    if RUN_TRADIER:
+                        self.tradier.cancelALLorders()
                     open_positions = mongo_helpers.get_mongo_openPositions(self)
                     for open_position in open_positions:
                         self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
 
             """  ONCE MARKET IS CLOSED CLOSED, CLOSE ALL CONNECTIONS TO MONGO  """
             if current_time >= SHUTDOWN_TIME:
+                self.isAlive = False
+                time.sleep(2)
                 disconnect = mongo_helpers.disconnect(self)
                 if disconnect:
                     connected = False
@@ -437,6 +440,30 @@ class Main(Tasks, TDWebsocket):
             time.sleep(helper_functions.selectSleep())
             print('\n')
 
+    def run(self):
+
+        runBacktest = True
+
+        while True:
+
+            current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
+            day = datetime.now(pytz.timezone(TIMEZONE)).strftime('%a')
+            weekends = ["Sat", "Sun"]
+
+            if current_time < RUN_BACKTEST_TIME:
+                runBacktest = False
+
+            if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
+                self.runTradingPlatform()
+
+            elif not runBacktest:
+                study = backtest.run(self)
+                if study:
+                    return
+
+            else:
+                print(f'sleeping 5m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME}')
+                time.sleep(10*60)
 
 if __name__ == "__main__":
     """ START OF SCRIPT.
@@ -445,56 +472,6 @@ if __name__ == "__main__":
 
     main = Main()
 
-    main.runTradingPlatform()
-
-
-
-
-
-# """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF
-# QUEUED ORDERS ON TRADIER & MONGO """
-# tradier_queued_list = []
-# tradier_queued = self.tradier.get_queuedPositions()
-# if len(tradier_queued) == 0 or tradier_queued == 'null':
-#     traider_queued = []
-# else:
-#     for queued in tradier_queued:
-#         tradier_queued_list.append(queued['id'])
-#
-# mongo_queued_list = []
-# mongo_queued = list(self.mongo.queue.find({}))
-# for queued in mongo_queued:
-#     mongo_queued_list.append(queued['Order_ID'])
-#
-# tradier_queued_list.sort()
-# mongo_queued_list.sort()
-#
-# if tradier_queued_list == mongo_queued_list:
-#     pass
-# else:
-#     print(f'something went wrong, tradier queued={tradier_queued} and mongo queued={mongo_queued}')
-#
-# """ QUICK SEARCH TO MAKE SURE THERE THE SAME ## OF
-# OPEN ORDERS ON TRADIER & MONGO """
-# tradier_open_list = []
-# tradier_open = self.tradier.get_openPositions()
-# if len(tradier_open) == 0 or tradier_open['positions'] == 'null':
-#     pass
-# elif len(tradier_open) == 1:
-#     tradier_open_list.append(tradier_open['positions']['position']['id'])
-# else:
-#     tradier_open = tradier_open['positions']['position']
-#     for openn in tradier_open:
-#         tradier_open_list.append(openn['id'])
-#
-# mongo_open_list = []
-# mongo_open = list(self.mongo.open_positions.find({}))
-# for openn in mongo_open:
-#     mongo_open_list.append(openn['Order_ID'])
-#
-# tradier_open_list.sort()
-# mongo_open_list.sort()
-# if tradier_open_list == mongo_open_list:
-#     pass
-# else:
-#     print(f'something went wrong, tradier openOrders={tradier_open} and mongo openOrders={mongo_open}')
+    main.run()
+    # main.connectALL()
+    # backtest.run(main)

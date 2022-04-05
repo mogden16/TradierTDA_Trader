@@ -50,12 +50,8 @@ def try_parsing_date(text):
     raise ValueError('no valid date format found')
 
 
-def findexistingDFs():
+def findexistingDFs(directory):
     existingdfs = []
-
-    current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%Y:%m:%d')
-    current_time = current_time.replace(":", "_")
-    directory = str(current_time)
 
     for file in glob.glob(f'{EXT_DIR}/*.xlsx'):
 
@@ -65,7 +61,7 @@ def findexistingDFs():
 
         existingdfs.append(file_name)
 
-    for file in glob.glob(f'{EXT_DIR}/backtest/dataframes/{directory}/*.xlsx'):
+    for file in glob.glob(f'{directory}/*.xlsx'):
 
         file_name = file.split('_')
 
@@ -158,6 +154,17 @@ def grabDataframes():
             msg = f"error: {traceback.format_exc()}"
             print(msg)
 
+def checkifFolderExists():
+    current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%Y:%m:%d')
+    current_time = current_time.replace(":","_")
+    directory = str(current_time)
+    parent_dir = f"{EXT_DIR}/backtest/dataframes/"
+    path_dir = f'{parent_dir}{directory}'
+
+    path = os.path.isdir(path_dir)
+
+    return path, path_dir
+
 def createFolder():
     current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%Y:%m:%d')
     current_time = current_time.replace(":","_")
@@ -169,10 +176,9 @@ def createFolder():
 
     return path
 
-def movexlsx():
+def movexlsx(path):
 
     # ABSOLUTE PATH TO XLSX_FILES DIRECTORY
-    path = createFolder()
     print(f"Starting to move files to: {path}")
 
     for file in tqdm(glob.glob(EXT_DIR + '/' + '*.xlsx')):
@@ -186,9 +192,9 @@ def movexlsx():
 
             print(f'error: {e}')
 
-    return path
-
     print(f"Done moving dataframes")
+
+    return
 
 def evaluateDF(dataframe):
 
@@ -283,14 +289,20 @@ def evaluateTakeProfit(path):
 
     MASTER_DF = MASTER_DF.sort_values(by=["Profit_minus_Fees"], ascending=False)
     print(MASTER_DF.head())
-    discord_helpers.send_discord_alert = f'{MASTER_DF.head(1)}'
+    discord_helpers.send_discord_alert = f'{str(MASTER_DF.head(3))}'
     MASTER_DF.to_excel('OCO_backtest.xlsx')
+
 
 def run(trader):
 
     start_time = datetime.now(pytz.timezone(config.TIMEZONE))
 
-    existing_dfs = findexistingDFs()
+    check, path = checkifFolderExists()
+    if check == False:
+        createFolder()
+
+    existing_dfs = findexistingDFs(path)
+
     for dataframe in existing_dfs:
         EXISTINGDFLIST.append(dataframe)
 
@@ -312,10 +324,12 @@ def run(trader):
 
     grabDataframes()
 
-    path = movexlsx()
+    movexlsx(path)
 
     evaluateTakeProfit(path)
 
-    movexlsx()
+    movexlsx(path)
 
     print('done')
+
+    return

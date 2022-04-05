@@ -31,7 +31,7 @@ def discord_messages(start_time, mins):
             'authorization': DISCORD_AUTH
         }
         r = requests.get(
-            f'https://discord.com/api/v9/channels/{CHANNELID}/messages', headers=headers)
+            f'https://discord.com/api/v9/channels/{CHANNELID}/messages?limit={100}', headers=headers)
 
         jsonn = json.loads(r.text)
         # for i in jsonn:

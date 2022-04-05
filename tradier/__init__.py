@@ -30,13 +30,13 @@ class TradierTrader(tradierOrderBuilder):
 
         self.logger = logger
 
-        if RUN_TRADIER:
+        if RUN_LIVE_TRADER:
 
-            self.account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
+            self.account_id = config.LIVE_ACCOUNT_NUMBER
 
         else:
 
-            self.account_id = config.ACCOUNT_ID
+            self.account_id = config.SANDBOX_ACCOUNT_NUMBER
 
         self.tradier_token = config.LIVE_ACCESS_TOKEN if RUN_LIVE_TRADER else config.SANDBOX_ACCESS_TOKEN
 
@@ -48,7 +48,7 @@ class TradierTrader(tradierOrderBuilder):
 
     def get_accountbalance(self):
         api_path = tradier_constants.API_PATH['account_balances']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id))}'
 
         response = requests.get(path,
                                 params={},
@@ -85,10 +85,10 @@ class TradierTrader(tradierOrderBuilder):
         return obj
 
     @exception_handler
-    def get_order(self, id):
+    def get_order(self, order_id):
 
         api_path = tradier_constants.API_PATH['account_order_status']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id)).replace("{id}",str(order_id))}'
 
         response = requests.get(path,
                                 params={'includeTags': 'false'},
@@ -102,7 +102,7 @@ class TradierTrader(tradierOrderBuilder):
     def get_openPositions(self):
 
         api_path = tradier_constants.API_PATH['account_positions']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id))}'
 
         response = requests.get(path,
                                 params={},
@@ -117,7 +117,7 @@ class TradierTrader(tradierOrderBuilder):
         """ THIS GETS ALL ORDERS FOR THE DAY'S SESSION """
 
         api_path = tradier_constants.API_PATH['account_orders']
-        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.account_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.tradier.account_id))}'
 
         response = requests.get(path,
                                 params={'includeTags': 'false'},
@@ -148,7 +148,7 @@ class TradierTrader(tradierOrderBuilder):
     def place_order(self, order):
 
         api_path = tradier_constants.API_PATH['orders']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id))}'
 
         response = requests.post(path,
                                 data=order,
@@ -162,7 +162,7 @@ class TradierTrader(tradierOrderBuilder):
     @exception_handler
     def modify_stopprice(self, order_id, price):
         api_path = tradier_constants.API_PATH['account_order_status']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(order_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id)).replace("{id}",str(order_id))}'
 
         response = requests.put(path,
                                 data={'stop': str(price)},
@@ -360,8 +360,7 @@ class TradierTrader(tradierOrderBuilder):
         """
 
         # SCAN ALL QUEUED ORDERS
-        queued_orders = self.mongo.queue.find({"Trader": self.user["Name"], "Order_ID": {
-                                        "$ne": None}, "Account_ID": self.account_id})
+        queued_orders = self.mongo.queue.find({"Trader": self.user["Name"]})
 
         for queue_order in queued_orders:
 

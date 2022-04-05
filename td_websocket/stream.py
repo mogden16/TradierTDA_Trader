@@ -47,7 +47,7 @@ class TDWebsocket:
         await asyncio.sleep(3)
         loop = asyncio.get_event_loop()
 
-        while True:
+        while self.isAlive:
             open_position_keys = []
             open_positions = self.mongo.open_positions.find({})
 
@@ -71,7 +71,7 @@ class TDWebsocket:
 
 
     async def heartbeat(self):
-        while True:
+        while self.isAlive:
             await asyncio.sleep(HEARTBEAT_SETTING)
             print(f'\n ========Running stream======== \n')
             await asyncio.sleep(HEARTBEAT_SETTING)
@@ -104,7 +104,7 @@ class TDWebsocket:
 
 
     async def work(self):
-        while True:
+        while self.isAlive:
             await stream_client.login()
             await stream_client.quality_of_service(StreamClient.QOSLevel.EXPRESS)
             self.initiate_open_positions()
@@ -122,7 +122,7 @@ class TDWebsocket:
             # stream_client.add_level_one_futures_handler(self.print_message)
             # await stream_client.level_one_futures_subs(self.open_position_keys, fields = [stream_client.LevelOneFuturesFields.BID_PRICE,stream_client.LevelOneFuturesFields.ASK_PRICE])
 
-            while True:
+            while self.isAlive:
                 await stream_client.handle_message()
                 await asyncio.sleep(.5)
 
@@ -131,7 +131,7 @@ class TDWebsocket:
 
         loop = asyncio.new_event_loop()
         loop.create_task(self.monitor())
-        while True:
+        while self.isAlive:
             workers = []
             workers.append(loop.create_task(self.work()))
             workers.append(loop.create_task(self.heartbeat()))
