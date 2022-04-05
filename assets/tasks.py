@@ -37,7 +37,7 @@ class Tasks:
             else tradier_constants.API_ENDPOINT['brokerage_sandbox']
 
         # if RUN_TRADIER:
-        #     self.account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
+        #     self.tradier_account_id = config.LIVE_ACCOUNT_NUMBER if RUN_LIVE_TRADER else config.SANDBOX_ACCOUNT_NUMBER
 
         self.tradier_token = config.LIVE_ACCESS_TOKEN if RUN_LIVE_TRADER else config.SANDBOX_ACCESS_TOKEN
 
@@ -48,7 +48,7 @@ class Tasks:
     def getTradierorder(self, order_id):
 
         api_path = tradier_constants.API_PATH['account_order_status']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(order_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id)).replace("{id}",str(order_id))}'
 
         response = requests.get(path,
                                 params={'includeTags': 'false'},
@@ -61,7 +61,7 @@ class Tasks:
     def cancelTradierorder(self, order_id):
 
         api_path = tradier_constants.API_PATH['account_order_status']
-        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.account_id)).replace("{id}", str(order_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.tradier.account_id)).replace("{id}", str(order_id))}'
 
         response = requests.delete(path,
                                 data={},
@@ -187,15 +187,19 @@ class Tasks:
             try:
 
                 if int(is_removed.deleted_count) == 0:
-                    self.logger.error(
-                        f"INITIAL FAIL OF DELETING OPEN POSITION FOR SYMBOL {symbol} - {self.user['Name']} ({modifiedAccountID(self.account_id)})")
+                    if RUN_TRADIER:
+                        self.logger.error(
+                            f"INITIAL FAIL OF DELETING OPEN POSITION FOR SYMBOL {symbol} - {self.user['Name']} ({modifiedAccountID(self.tradier.account_id)})")
+                    else:
+                        self.logger.error(
+                            f"INITIAL FAIL OF DELETING OPEN POSITION FOR SYMBOL {symbol} - {self.user['Name']} ({modifiedAccountID(self.account_id)})")
 
                     self.mongo.open_positions.delete_one(
                         {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy})
 
             except Exception:
 
-                msg = f"{self.user['Name']} - {modifiedAccountID(self.account_id)} - {traceback.format_exc()}"
+                msg = f"{self.user['Name']} - {modifiedAccountID(self.tradier.account_id if RUN_TRADIER else self.account_id)} - {traceback.format_exc()}"
 
                 self.logger.error(msg)
 
@@ -220,7 +224,7 @@ class Tasks:
 
         except Exception:
 
-            msg = f"{self.user['Name']} - {modifiedAccountID(self.account_id)} - {traceback.format_exc()}"
+            msg = f"{self.user['Name']} - {modifiedAccountID(self.tradier.account_id if RUN_TRADIER else self.account_id)} - {traceback.format_exc()}"
 
             self.logger.error(msg)
 
@@ -228,8 +232,9 @@ class Tasks:
             f"Pushing {side} Order For {symbol} To {'Open Positions' if direction == 'OPEN POSITION' else 'Closed Positions'} ({modifiedAccountID(self.account_id)})")
 
         # REMOVE FROM QUEUE
+
         self.mongo.queue.delete_one({"Trader": self.user["Name"], "Symbol": symbol,
-                                     "Strategy": strategy, "Account_ID": self.account_id})
+                                     "Strategy": strategy})
 
         discord_helpers.send_discord_alert(discord_message_to_push)
 
@@ -253,15 +258,15 @@ class Tasks:
             trulycanceled = 0
             for order in childOrderStrategies:
 
-                if RUN_LIVE_TRADER and not RUN_TRADIER:
-                    for td_trader in self.traders.values():
-                        spec_order = td_trader.tdameritrade.getSpecificOrder(order['Order_ID'])
+                if position['Account_ID'] == self.tradier.account_id:
+
+                    spec_order = self.getTradierorder(order['Order_ID'])
 
                     new_status = spec_order['order']["status"]
 
-                elif RUN_TRADIER:
-
-                    spec_order = self.getTradierorder(order['Order_ID'])
+                elif RUN_LIVE_TRADER and position['Account_ID'] == self.account_id:
+                    for td_trader in self.traders.values():
+                        spec_order = td_trader.tdameritrade.getSpecificOrder(order['Order_ID'])
 
                     new_status = spec_order['order']["status"]
 
@@ -271,11 +276,11 @@ class Tasks:
 
                 if new_status.upper() == "FILLED" or new_status.upper() == "EXPIRED":
 
-                    if RUN_TRADIER:
+                    if position['Account_ID'] == self.tradier.account_id:
 
                         self.set_closeOrder(position, spec_order['order'])
 
-                    elif RUN_LIVE_TRADER and not RUN_TRADIER:
+                    elif RUN_LIVE_TRADER and position['Account_ID'] == self.account_id:
 
                         self.set_closeOrder(position, spec_order)
 
@@ -310,7 +315,7 @@ class Tasks:
                             "Strategy": position["Strategy"],
                             "Trader": self.user["Name"],
                             "Date": getDatetime(),
-                            "Account_ID": self.account_id
+                            "Account_ID": self.tradier.account_id if RUN_TRADIER else self.account_id
                         }
                         self.mongo.rejected.insert_one(
                             other) if new_status == "REJECTED" else self.canceled.insert_one(other)
@@ -406,8 +411,12 @@ class Tasks:
             IF QUEUE ORDER INSERTION TIME GREATER THAN TWO HOURS, THEN THE ORDER IS CANCELLED.
         """
         # CHECK ALL QUEUE ORDERS AND CANCEL ORDER IF GREATER THAN TWO MINUTES OLD
-        queue_orders = self.mongo.queue.find(
-            {"Trader": self.user["Name"], "Account_ID": self.account_id})
+        if RUN_TRADIER:
+            queue_orders = self.mongo.queue.find(
+                {"Trader": self.user["Name"], "Account_ID": self.tradier.account_id})
+        else:
+            queue_orders = self.mongo.queue.find(
+                {"Trader": self.user["Name"], "Account_ID": self.account_id})
 
         dt = datetime.now(tz=pytz.UTC).replace(microsecond=0)
 
@@ -441,7 +450,7 @@ class Tasks:
                             "Order_Type": order["Order_Type"],
                             "Order_Status": "CANCELED",
                             "Strategy": order["Strategy"],
-                            "Account_ID": self.account_id,
+                            "Account_ID": self.tradier.account_id,
                             "Trader": self.user["Name"],
                             "Date": getDatetime()
                         }
@@ -488,9 +497,13 @@ class Tasks:
     def runTasks(self):
         """ METHOD RUNS TASKS ON WHILE LOOP EVERY 5 - 60 SECONDS DEPENDING.
         """
+        if RUN_TRADIER:
+            acct_id = self.tradier.account_id
+        else:
+            acct_id = self.account_id
 
         self.logger.info(
-            f"STARTING TASKS FOR {self.user['Name']} ({modifiedAccountID(self.account_id)})", extra={'log': False})
+            f"STARTING TASKS FOR {self.user['Name']} ({modifiedAccountID(acct_id)}", extra={'log': False})
 
         while self.isAlive:
 
@@ -509,11 +522,11 @@ class Tasks:
             except Exception as e:
 
                 self.logger.error(
-                    f"ACCOUNT ID: {modifiedAccountID(self.account_id)} - TRADER: {self.user['Name']} - {e}")
+                    f"ACCOUNT ID: {modifiedAccountID(acct_id)} - TRADER: {self.user['Name']} - {e}")
 
             finally:
 
                 time.sleep(selectSleep())
 
         self.logger.warning(
-            f"TASK STOPPED FOR ACCOUNT ID {modifiedAccountID(self.account_id)}")
+            f"TASK STOPPED FOR ACCOUNT ID {modifiedAccountID(acct_id)}")
