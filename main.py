@@ -472,6 +472,9 @@ if __name__ == "__main__":
 
     main = Main()
 
-    # main.run()
-    main.connectALL()
-    backtest.run(main)
+    main.run()
+
+    """ IF YOU JUST WANT TO RUN BACKTEST, 
+    COMMENT OUT "main.run()" AND UNCOMMENT THESE LINES BELOW """
+    # main.connectALL()
+    # backtest.run(main)
