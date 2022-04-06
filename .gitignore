@@ -8,3 +8,4 @@ config.py
 token.json
 credentials.json
 *.log
+*.xlsx

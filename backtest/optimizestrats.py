@@ -10,25 +10,19 @@ CHANNELID = config.CHANNELID
 DISCORD_AUTH = config.DISCORD_AUTH
 DISCORD_USER = config.DISCORD_USER
 POLYGON_URI = config.POLYGON_URI
+COMMISSION = config.COMMISSION
+MIN_OPTIONPRICE_BACKTEST = config.MIN_OPTIONPRICE_BACKTEST
+MAX_OPTIONPRICE_BACKTEST = config.MAX_OPTIONPRICE_BACKTEST
 
 
-def startDF(file, position_size):
+def startDF(file):
 
     df = pd.read_excel(file, engine='openpyxl')
     pre_symbol = file.split("_")
-    pre_symbol = pre_symbol[1]
+    pre_symbol = pre_symbol[-2]
+
     if df.empty:
         return
-    else:
-        entry = df.loc[0]
-    entry_date = entry['t']
-    entry_price = entry['c']
-    max_price = entry['c']
-
-    position_size = int(position_size)
-    quantity = int((position_size / 100) / entry_price)
-    commission_per = 0.65
-    fees = quantity * commission_per
 
     win = 0
     loss = 0
@@ -42,6 +36,7 @@ def startDF(file, position_size):
     avg_pl_of_win = 0
     avg_pl_of_loss = 0
     avg_pl_per_trade = 0
+    fees = 0
     profit_minus_fees = 0
 
     obj = {
@@ -70,24 +65,38 @@ def evalOCOorder(df, obj, take_profit_pct_factor, stop_loss_pct_factor, position
 
     open_order = True
     for index, row in df.iterrows():
+
         entry = df.loc[0]
+
         entry_date = entry['t']
+
         entry_price = entry['c']
-        max_price = entry['c']
-        position_size = int(position_size)
+
+        if entry_price < MIN_OPTIONPRICE_BACKTEST or entry_price > MAX_OPTIONPRICE_BACKTEST:
+            return
+
         quantity = int((position_size / 100) / entry_price)
+
         if quantity == 0:
             return
-        commission_per = 0.65
+
+        max_price = entry['c']
+
+        commission_per = COMMISSION
         fees = quantity * commission_per
 
-        take_profit_price = round(entry_price*(1+take_profit_pct_factor),2)
-        stoploss_price = round(entry_price*(1-stop_loss_pct_factor),2)
+        take_profit_price = round(entry_price*(1+take_profit_pct_factor), 2)
+
+        stoploss_price = round(entry_price*(1-stop_loss_pct_factor), 2)
 
         if row['h'] >= take_profit_price and open_order:
+
             profit = round(((take_profit_price - entry_price) * quantity * 100), 2)
+
             exit_price = take_profit_price
+
             exit_time = row['t']
+
             open_order = False
 
             obj['Win'] = 1
@@ -103,9 +112,13 @@ def evalOCOorder(df, obj, take_profit_pct_factor, stop_loss_pct_factor, position
             return obj
 
         elif row['l'] <= stoploss_price and open_order:
+
             profit = round(((stoploss_price - entry_price) * quantity * 100), 2)
+
             exit_price = stoploss_price
+
             exit_time = row['t']
+
             open_order = False
 
             obj['Loss'] = 1
@@ -121,12 +134,18 @@ def evalOCOorder(df, obj, take_profit_pct_factor, stop_loss_pct_factor, position
             return obj
 
         elif index == (len(df.index)-1) and open_order:
-            # print('did not hit take_profit')
+            """  SOLD AT EndOfDay  """
+
             exit = df.iloc[-1]
+
             exit_price = exit['c']
+
             exit_time = exit['t']
+
             profit = round(((exit_price - entry_price) * quantity * 100), 2)
+
             open_order = False
+
             if profit > 0:
                 obj['Win'] = 1
                 obj['Highest_Profit'] = profit

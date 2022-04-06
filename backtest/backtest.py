@@ -31,6 +31,7 @@ EXT_DIR = config.EXT_DIR
 LOOKBACK_DAYS = config.LOOKBACK_DAYS
 TEST_DISCORD = config.TEST_DISCORD
 TEST_CLOSED_POSITIONS = config.TEST_CLOSED_POSITIONS
+TEST_ANALYSIS_POSITIONS = config.TEST_ANALYSIS_POSITIONS
 POSITION_SIZE = config.POSITION_SIZE
 TIMEZONE = config.TIMEZONE
 
@@ -71,20 +72,39 @@ def findexistingDFs(directory):
 
     return existingdfs
 
-def find_closed_positions(trader, starttime):
+
+def find_closed_positions(trader, starttime, lookback):
+
     orders = []
 
-    closed_positions = trader.mongo.closed_positions.find({})
+    closed_positions = list(trader.mongo.closed_positions.find({}))
 
     for position in closed_positions:
 
-        entry_date = position['Entry_Date']
+        entry_date = pytz.timezone(TIMEZONE).localize(position['Entry_Date'])
 
-        if entry_date >= (starttime-timedelta(days=LOOKBACK_DAYS)):
+        if entry_date >= (starttime-timedelta(days=lookback)):
 
             orders.append(position)
 
     return orders
+
+
+def find_analysis_positions(trader, starttime, lookback):
+
+    orders = []
+
+    closed_positions = list(trader.mongo.closed_positions.find({}))
+
+    for position in closed_positions:
+
+        entry_date = pytz.timezone(TIMEZONE).localize(position['Entry_Date'])
+
+        if entry_date >= (starttime - timedelta(days=lookback)):
+            orders.append(position)
+
+    return orders
+
 
 def grabDataframes():
     client = polygon.StocksClient(POLYGON_URI)
@@ -252,40 +272,33 @@ def evaluateTakeProfit(path):
             for file in tqdm(glob.glob(path + '/*.xlsx')):
                 file_name = file.split('_')
                 file_name = file_name[-2]
-                # print(file_name)
+
                 try:
-                    returnn = optimizestrats.startDF(file, position_size=POSITION_SIZE)
-                    # print(returnn)
+
+                    df, obj = optimizestrats.startDF(file)
+
                     if returnn == None:
                         continue
 
-                    df = returnn[0]
-                    obj = returnn[1]
-
-                    PL = optimizestrats.evalOCOorder(df, obj, take_profit_pct_factor,
+                    pl = optimizestrats.evalOCOorder(df, obj, take_profit_pct_factor,
                                                      stop_loss_pct_factor, position_size=POSITION_SIZE)
-                    if PL == None:
+                    if pl == None:
                         continue
                     else:
-                        PL['Take_Profit_Pct'] = take_profit_pct_factor * 100
-                        PL['Stop_Loss_Pct'] = stop_loss_pct_factor * 100
-                        runningPL.append(PL)
+                        pl['Take_Profit_Pct'] = take_profit_pct_factor * 100
+                        pl['Stop_Loss_Pct'] = stop_loss_pct_factor * 100
+                        runningPL.append(pl)
 
                 except Exception:
 
                     msg = f"error: {traceback.format_exc()}"
                     print(msg)
-                    # print(runningPL)
 
             df_eval = pd.DataFrame(runningPL)
             DF = evaluateDF(df_eval)
             DF = pd.DataFrame(DF, index=[0])
 
             MASTER_DF = pd.concat([MASTER_DF, DF], axis=0, ignore_index=False).round(decimals=2)
-
-    # discord_helpers.send_discord_alert = f'P/L if take profit is {take_profit_pct_factor * 100}% \n'\
-    #                                      f'P/L if stop loss is {stop_loss_pct_factor * 100}%: \n'\
-    #                                      f'Profit_minus_Fees: {profit_minus_fees}'
 
     MASTER_DF = MASTER_DF.sort_values(by=["Profit_minus_Fees"], ascending=False)
     print(MASTER_DF.head())
@@ -298,13 +311,14 @@ def run(trader):
     start_time = datetime.now(pytz.timezone(config.TIMEZONE))
 
     check, path = checkifFolderExists()
+
     if check == False:
         createFolder()
 
-    existing_dfs = findexistingDFs(path)
-
-    for dataframe in existing_dfs:
-        EXISTINGDFLIST.append(dataframe)
+    # existing_dfs = findexistingDFs(path)
+    #
+    # for dataframe in existing_dfs:
+    #     EXISTINGDFLIST.append(dataframe)
 
     if TEST_DISCORD:
         discord_alerts = discord_scanner.discord_messages(start_time, mins=60*24*LOOKBACK_DAYS)  # Convert to mins
@@ -314,13 +328,24 @@ def run(trader):
         for alert in discord_alerts:
             BACKTESTLIST.append(alert)
 
-    if TEST_CLOSED_POSITIONS:
-        closed_alerts = find_closed_positions(trader, start_time)
+    if TEST_ANALYSIS_POSITIONS:
+        analysis_alerts = find_analysis_positions(trader, start_time, LOOKBACK_DAYS)
+        if not analysis_alerts:
+            return
+
+        for alert in analysis_alerts:
+            BACKTESTLIST.append(alert)
+
+    elif TEST_CLOSED_POSITIONS:
+        closed_alerts = find_closed_positions(trader, start_time, LOOKBACK_DAYS)
         if not closed_alerts:
             return
 
         for alert in closed_alerts:
             BACKTESTLIST.append(alert)
+
+
+
 
     grabDataframes()
 
