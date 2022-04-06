@@ -436,6 +436,10 @@ class Main(Tasks, TDWebsocket):
             IF ERRORS ARE > 10, YOU MIGHT WANT TO CHECK OUT YOUR REQUESTS  """
             if self.error > 0:
                 print(f'errors: {self.error}')
+                if self.error >= 60:
+                    c.OPTIONLIST.clear()
+                    self.error = 0
+                    return
 
             time.sleep(helper_functions.selectSleep())
             print('\n')
