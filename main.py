@@ -356,6 +356,8 @@ class Main(Tasks, TDWebsocket):
 
         connected = self.connectALL()
 
+        SHUT_DOWN = False
+
         while connected:
 
             """  THIS RUNS THE TD INSTANCE  """
@@ -372,7 +374,7 @@ class Main(Tasks, TDWebsocket):
 
             """  SELL OUT OF ALL POSITIONS AT SELL_ALL_POSITION TIME  """
             if DAY_TRADE:
-                if SHUTDOWN_TIME > current_time > SELL_ALL_POSITIONS:
+                if SHUTDOWN_TIME > current_time > SELL_ALL_POSITIONS and not SHUT_DOWN:
                     print("Shutdown time has passed, all positions now CLOSING")
                     if RUN_TRADIER:
                         self.tradier.cancelALLorders()
@@ -466,7 +468,7 @@ class Main(Tasks, TDWebsocket):
                     return
 
             else:
-                print(f'sleeping 5m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME}')
+                print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME}')
                 time.sleep(10*60)
 
 if __name__ == "__main__":
