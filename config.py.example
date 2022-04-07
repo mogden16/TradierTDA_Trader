@@ -9,7 +9,7 @@ IS_TESTING = False         # SET TO TRUE IF OUTSIDE MARKET HOURS
 TRADE_HEDGES = True
 
 # MONGO #
-MONGO_URI = 'mongodb+srv://mogden16:Yankees16!@cluster1.6jzau.mongodb.net/Api_Trader?retryWrites=true&w=majority'
+MONGO_URI = 'mongodb+srv://XXXXXXXXXX:XXXXXXXXXXXX@XXXXXXXXX.6jzau.mongodb.net/Api_Trader?retryWrites=true&w=majority'
 
 # CONNECT TO GMAIL #
 RUN_GMAIL = True
