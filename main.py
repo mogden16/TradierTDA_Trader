@@ -352,7 +352,11 @@ class Main(Tasks, TDWebsocket):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
         """
 
-        start_time = datetime.now(pytz.timezone(config.TIMEZONE))
+        start_time = datetime.now(pytz.timezone(TIMEZONE))
+
+        message = f'Bot is booting up, its currently: {start_time}'
+        discord_helpers.send_discord_alert(message)
+        print(message)
 
         connected = self.connectALL()
 
@@ -389,6 +393,9 @@ class Main(Tasks, TDWebsocket):
                 disconnect = mongo_helpers.disconnect(self)
                 if disconnect:
                     connected = False
+                    message = f'Bot is shutting down, its currently: {start_time}'
+                    discord_helpers.send_discord_alert(message)
+                    print(message)
                     break
 
             if current_time > TURN_OFF_TRADES:
