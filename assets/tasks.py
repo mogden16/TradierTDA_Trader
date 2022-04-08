@@ -395,7 +395,7 @@ class Tasks:
         obj = {"Active": True,
                "Order_Type": "STANDARD",
                "Asset_Type": asset_type,
-               "Position_Size": 500,
+               "Position_Size": 300,
                "Position_Type": "LONG",
                "Account_ID": self.account_id,
                "Strategy": strategy,
@@ -403,7 +403,7 @@ class Tasks:
 
         # IF STRATEGY NOT IN STRATEGIES COLLECTION IN MONGO, THEN ADD IT
 
-        self.strategies.update_one({"Strategy": strategy},{"$set": obj}, upsert=True)
+        self.mongo.strategies.update_one({"Strategy": strategy}, {"$set": obj}, upsert=True)
 
     @exception_handler
     def killQueueOrder(self):
@@ -457,7 +457,7 @@ class Tasks:
 
                         self.mongo.canceled.insert_one(other)
 
-                        self.queue.delete_one(
+                        self.mongo.queue.delete_one(
                             {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]})
 
                         self.logger.info(
@@ -485,7 +485,7 @@ class Tasks:
 
                         self.mongo.canceled.insert_one(other)
 
-                        self.queue.delete_one(
+                        self.mongo.queue.delete_one(
                             {"Trader": self.user["Name"], "Symbol": order["Symbol"], "Strategy": order["Strategy"]})
 
                         self.logger.info(
