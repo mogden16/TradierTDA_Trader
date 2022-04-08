@@ -48,7 +48,7 @@ class TradierTrader(tradierOrderBuilder):
 
     def get_accountbalance(self):
         api_path = tradier_constants.API_PATH['account_balances']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id))}'
 
         response = requests.get(path,
                                 params={},
@@ -88,7 +88,7 @@ class TradierTrader(tradierOrderBuilder):
     def get_order(self, order_id):
 
         api_path = tradier_constants.API_PATH['account_order_status']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id)).replace("{id}",str(order_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(order_id))}'
 
         response = requests.get(path,
                                 params={'includeTags': 'false'},
@@ -102,7 +102,7 @@ class TradierTrader(tradierOrderBuilder):
     def get_openPositions(self):
 
         api_path = tradier_constants.API_PATH['account_positions']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id))}'
 
         response = requests.get(path,
                                 params={},
@@ -117,7 +117,7 @@ class TradierTrader(tradierOrderBuilder):
         """ THIS GETS ALL ORDERS FOR THE DAY'S SESSION """
 
         api_path = tradier_constants.API_PATH['account_orders']
-        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.tradier.account_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}", str(self.account_id))}'
 
         response = requests.get(path,
                                 params={'includeTags': 'false'},
@@ -148,7 +148,7 @@ class TradierTrader(tradierOrderBuilder):
     def place_order(self, order):
 
         api_path = tradier_constants.API_PATH['orders']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id))}'
 
         response = requests.post(path,
                                 data=order,
@@ -162,7 +162,7 @@ class TradierTrader(tradierOrderBuilder):
     @exception_handler
     def modify_stopprice(self, order_id, price):
         api_path = tradier_constants.API_PATH['account_order_status']
-        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.tradier.account_id)).replace("{id}",str(order_id))}'
+        path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(order_id))}'
 
         response = requests.put(path,
                                 data={'stop': str(price)},
