@@ -115,7 +115,19 @@ class OrderBuilder:
             self.obj["isRunner"] = trade_data["isRunner"]
 
         # GET QUOTE FOR SYMBOL
-        if not IS_TESTING:
+        if IS_TESTING:
+
+            price = 1
+
+        # OCO ORDER NEEDS TO USE ASK PRICE FOR ISSUE WITH THE ORDER BEING TERMINATED UPON BEING PLACED
+        elif OCOorder:
+
+            resp = self.tdameritrade.getQuote(
+                symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"])
+
+            price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
+
+        else:
 
             try:
                 resp = self.tdameritrade.getQuote(
@@ -135,16 +147,6 @@ class OrderBuilder:
                 msg = f"error: {traceback.format_exc()}"
 
                 self.logger.error(msg)
-
-        else:
-
-            price = 1
-
-
-        # OCO ORDER NEEDS TO USE ASK PRICE FOR ISSUE WITH THE ORDER BEING TERMINATED UPON BEING PLACED
-        if OCOorder:
-
-            price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
 
         self.order["price"] = round(price, 2) if price >= 1 else round(price, 4)
 

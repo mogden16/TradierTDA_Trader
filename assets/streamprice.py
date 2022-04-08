@@ -42,8 +42,7 @@ def streamPrice(trader):
 
         try:
             if IS_TESTING:
-                current_price = float(input(f'what is current price for {pre_symbol}    '
-                                            f'take profit {takeprofit_price}: '))
+                current_price = float(input(f'what is current price for {pre_symbol}'))
                 print(f'self.isTesting is set to {IS_TESTING} - running fake numbers')
 
             else:
@@ -120,6 +119,8 @@ def streamPrice(trader):
                                                                upsert=True)
 
             elif order_type == "CUSTOM":
+                if IS_TESTING:
+                    target_price = 1 * (1+TAKEPROFIT_PERCENTAGE)
 
                 for i in range(0, 2):
                     if RUN_TRADIER:
