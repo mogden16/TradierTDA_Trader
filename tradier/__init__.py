@@ -10,7 +10,7 @@ from assets.exception_handler import exception_handler
 from tradier.tradierOrderBuilder import tradierOrderBuilder
 from tradier.tradier_helpers import tradierExtractOCOChildren
 from discord import discord_helpers
-import assets
+from assets.tasks import Tasks
 
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 RUN_TRADIER = config.RUN_TRADIER
@@ -662,7 +662,7 @@ class TradierTrader(tradierOrderBuilder):
 
             print('cant find the strategy in mongo')
 
-            assets.tasks.addNewStrategy(self, strategy, asset_type)
+            Tasks.addNewStrategy(self, strategy, asset_type)
 
             strategy_object = self.mongo.strategies.find_one(
                 {"Account_ID": self.account_id, "Strategy": strategy})
