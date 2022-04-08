@@ -277,9 +277,6 @@ def evaluateTakeProfit(path):
 
                     df, obj = optimizestrats.startDF(file)
 
-                    if returnn == None:
-                        continue
-
                     pl = optimizestrats.evalOCOorder(df, obj, take_profit_pct_factor,
                                                      stop_loss_pct_factor, position_size=POSITION_SIZE)
                     if pl == None:
@@ -319,6 +316,9 @@ def run(trader):
     #
     # for dataframe in existing_dfs:
     #     EXISTINGDFLIST.append(dataframe)
+    if not TEST_DISCORD and not TEST_ANALYSIS_POSITIONS and not TEST_CLOSED_POSITIONS:
+        print("You need to set one test group to 'True'")
+        return
 
     if TEST_DISCORD:
         discord_alerts = discord_scanner.discord_messages(start_time, mins=60*24*LOOKBACK_DAYS)  # Convert to mins
@@ -343,9 +343,6 @@ def run(trader):
 
         for alert in closed_alerts:
             BACKTESTLIST.append(alert)
-
-
-
 
     grabDataframes()
 
