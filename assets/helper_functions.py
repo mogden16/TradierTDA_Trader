@@ -116,3 +116,24 @@ def formatGmailAlerts(trade_data):
         trade_data_list.append(obj)
 
     return trade_data_list
+
+
+def addNewStrategy(trader, strategy, asset_type):
+    """ METHOD UPDATES STRATEGIES OBJECT IN MONGODB WITH NEW STRATEGIES.
+
+    Args:
+        strategy ([str]): STRATEGY NAME
+    """
+
+    obj = {"Active": True,
+           "Order_Type": "STANDARD",
+           "Asset_Type": asset_type,
+           "Position_Size": 300,
+           "Position_Type": "LONG",
+           "Account_ID": trader.account_id,
+           "Strategy": strategy,
+           }
+
+    # IF STRATEGY NOT IN STRATEGIES COLLECTION IN MONGO, THEN ADD IT
+
+    trader.mongo.strategies.update_one({"Strategy": strategy}, {"$set": obj}, upsert=True)

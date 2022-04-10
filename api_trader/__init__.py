@@ -1,4 +1,4 @@
-from assets.helper_functions import getDatetime, modifiedAccountID
+from assets.helper_functions import getDatetime, modifiedAccountID, addNewStrategy
 from assets.tasks import Tasks
 from assets.exception_handler import exception_handler
 from api_trader.order_builder import OrderBuilder
@@ -570,7 +570,7 @@ class ApiTrader(OrderBuilder):
 
         if not strategy_object:
 
-            self.addNewStrategy(strategy, asset_type)
+            addNewStrategy(self, strategy, asset_type)
 
             strategy_object = self.strategies.find_one(
                 {"Account_ID": self.account_id, "Strategy": strategy})

@@ -22,6 +22,9 @@ MAX_QUEUE_LENGTH = config.MAX_QUEUE_LENGTH
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 SELL_PRICE = config.SELL_PRICE
 
+
+
+
 class Tasks:
 
     # THE TASKS CLASS IS USED FOR HANDLING ADDITIONAL TASKS OUTSIDE OF THE LIVE TRADER.
@@ -383,27 +386,6 @@ class Tasks:
                         round(spec_order["price"] * (1-STOP_LOSS_PERCENTAGE), 2)
 
         return oco_children
-
-    @exception_handler
-    def addNewStrategy(self, strategy, asset_type):
-        """ METHOD UPDATES STRATEGIES OBJECT IN MONGODB WITH NEW STRATEGIES.
-
-        Args:
-            strategy ([str]): STRATEGY NAME
-        """
-
-        obj = {"Active": True,
-               "Order_Type": "STANDARD",
-               "Asset_Type": asset_type,
-               "Position_Size": 300,
-               "Position_Type": "LONG",
-               "Account_ID": self.account_id,
-               "Strategy": strategy,
-               }
-
-        # IF STRATEGY NOT IN STRATEGIES COLLECTION IN MONGO, THEN ADD IT
-
-        self.mongo.strategies.update_one({"Strategy": strategy}, {"$set": obj}, upsert=True)
 
     @exception_handler
     def killQueueOrder(self):
