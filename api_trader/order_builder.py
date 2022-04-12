@@ -73,6 +73,8 @@ class OrderBuilder:
 
         asset_type = "OPTION" if "Pre_Symbol" in trade_data else "EQUITY"
 
+        trade_type = trade_data["Trade_Type"]
+
         # TDA ORDER OBJECT
         self.order["session"] = "NORMAL"
 
@@ -133,8 +135,16 @@ class OrderBuilder:
                 resp = self.tdameritrade.getQuote(
                     symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"])
 
-                price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][BUY_PRICE]) if side in ["BUY", "BUY_TO_OPEN", "BUY_TO_CLOSE"] else float(
-                    resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
+                if trade_type == "MARKET":
+                    price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]]['bidPrice'])
+
+                else:
+                    if side in ["BUY", "BUY_TO_OPEN", "BUY_TO_CLOSE"]:
+                        price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][BUY_PRICE])
+
+                    else:
+                        price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
+
 
                 if list(resp.keys())[0] == "error":
                     print(f'error scanning for {symbol}') if asset_type == "EQUITY" else (
