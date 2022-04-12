@@ -31,6 +31,10 @@ def streamPrice(trader):
             print(f'Queued Position: {pre_symbol}  order_price: {price}  last_price: {current_price} \n')
 
     for open_position in open_positions:
+        if "Pre_Symbol" not in open_position.keys():
+            id = open_position['_id']
+            trader.mongo.open_positions.deleteOne({"_id": id})
+            continue
         id = open_position['_id']
         symbol = open_position['Symbol']
         asset_type = open_position['Asset_Type']
