@@ -55,6 +55,10 @@ class TDWebsocket:
                 await asyncio.sleep(.5)
             else:
                 for open_position in open_positions:
+                    if "Pre_Symbol" not in open_position.keys():
+                        id = open_position['_id']
+                        self.mongo.open_positions.deleteOne({"_id": id})
+                            continue
                     key = open_position['Pre_Symbol']
                     open_position_keys.append(key)
 
