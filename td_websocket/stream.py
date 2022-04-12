@@ -100,7 +100,8 @@ class TDWebsocket:
 
             except Exception as e:
 
-                continue
+                self.logger.error(
+                    f"ERROR UPDATING CURRENT PRICING - {e}")
 
 
     async def work(self):
