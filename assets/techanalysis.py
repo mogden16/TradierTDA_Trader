@@ -10,7 +10,7 @@ RUN_30M_TA = config.RUN_30M_TA
 
 
 def get_TA(value, trader):
-
+    obj = {}
     try:
         symbol = value['Symbol']
         pre_symbol = value['Pre_Symbol']
@@ -98,6 +98,7 @@ def get_TA(value, trader):
     except Exception:
 
         msg = f"error: {traceback.format_exc()}"
+
 
     return obj
 

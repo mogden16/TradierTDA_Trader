@@ -40,6 +40,8 @@ SELL_ALL_POSITIONS = config.SELL_ALL_POSITIONS
 SHUTDOWN_TIME = config.SHUTDOWN_TIME
 RUN_TASKS = config.RUN_TASKS
 RUN_BACKTEST_TIME = config.RUN_BACKTEST_TIME
+TEST_CLOSED_POSITIONS = config.TEST_CLOSED_POSITIONS
+TEST_ANALYSIS_POSITIONS = config.TEST_ANALYSIS_POSITIONS
 
 class Main(Tasks, TDWebsocket):
 
@@ -277,9 +279,10 @@ class Main(Tasks, TDWebsocket):
                 "Exp_Date": value['Exp_Date'],
                 "Strike_Price": value['Strike_Price'],
                 "Option_Type": value['Option_Type'],
-                "Strategy": value['Strategy'],
+                "Strategy": "STANDARD",
                 "Asset_Type": "OPTION",
-                "Trade_Type": trade_type
+                "Trade_Type": trade_type,
+                "isRunner": isRunner
             }
             trade_data.append(obj)
 
@@ -448,7 +451,6 @@ class Main(Tasks, TDWebsocket):
                 if self.error >= 60:
                     c.OPTIONLIST.clear()
                     self.error = 0
-                    return
 
             time.sleep(helper_functions.selectSleep())
             print('\n')
@@ -470,9 +472,16 @@ class Main(Tasks, TDWebsocket):
                 self.runTradingPlatform()
 
             elif not runBacktest:
+                if TEST_CLOSED_POSITIONS or TEST_ANALYSIS_POSITIONS:
+                    self.connectALL()
                 study = backtest.run(self)
                 if study:
-                    return
+                    runBacktest = True
+                    disconnect = mongo_helpers.disconnect(self)
+                    if disconnect:
+                        message = f'Bot is shutting down, its currently: {current_time}'
+                        discord_helpers.send_discord_alert(message)
+                        print(message)
 
             else:
                 print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME}')

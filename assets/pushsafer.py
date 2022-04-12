@@ -1,17 +1,8 @@
-from pprint import pprint
-from dotenv import load_dotenv
 import requests
 import os
-from pathlib import Path
+import config
 
-THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
-
-path = Path(THIS_FOLDER)
-
-load_dotenv(dotenv_path=f"{path.parent}/config.env")
-
-PUSH_API_KEY = os.getenv('PUSH_API_KEY')
-
+PUSH_API_KEY = config.PUSH_API_KEY
 
 class PushNotification:
 

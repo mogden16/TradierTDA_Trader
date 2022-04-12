@@ -435,7 +435,10 @@ class ApiTrader(OrderBuilder):
         elif direction == "CLOSE POSITION":
 
             position = self.open_positions.find_one(
-                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy})
+                {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol})
+
+            if position == None:
+                return
 
             obj["Qty"] = position["Qty"]
 
@@ -551,18 +554,18 @@ class ApiTrader(OrderBuilder):
         # CHECK OPEN POSITIONS AND QUEUE
         if TRADE_MULTI_STRIKES:
             open_position = self.open_positions.find_one(
-                {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol, "Strategy": strategy, "Account_ID": self.account_id})
+                {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol, "Account_ID": self.account_id})
 
             queued = self.queue.find_one(
-                {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol, "Strategy": strategy, "Account_ID": self.account_id})
+                {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol, "Account_ID": self.account_id})
 
         else:
             open_position = self.open_positions.find_one(
-                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy,
+                {"Trader": self.user["Name"], "Symbol": symbol,
                  "Account_ID": self.account_id})
 
             queued = self.queue.find_one(
-                {"Trader": self.user["Name"], "Symbol": symbol, "Strategy": strategy,
+                {"Trader": self.user["Name"], "Symbol": symbol,
                  "Account_ID": self.account_id})
 
         strategy_object = self.strategies.find_one(
@@ -605,7 +608,10 @@ class ApiTrader(OrderBuilder):
                 # NEED TO SELL LONG OPTION
                 elif side == "SELL_TO_CLOSE" and position_type == "LONG":
 
-                    pass
+                    self.sendOrder(row if not open_position else {
+                        **row, **open_position}, strategy_object, direction)
+
+                    return
 
                 # NEED TO COVER SHORT OPTION
                 elif side == "BUY_TO_CLOSE" and position_type == "SHORT":

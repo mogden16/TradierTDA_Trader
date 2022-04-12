@@ -16,7 +16,7 @@ RUN_GMAIL = True
 RUN_DISCORD = True
 
 # PUSHSAFER #
-# PUSH_API_KEY = *enter pushsafer api key here*
+PUSH_API_KEY = None              # *enter pushsafer api key here*
 
 # PYTZ TIMEZONE #
 TIMEZONE = 'US/Eastern'
