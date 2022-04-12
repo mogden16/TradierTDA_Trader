@@ -57,8 +57,8 @@ class TDWebsocket:
                 for open_position in open_positions:
                     if "Pre_Symbol" not in open_position.keys():
                         id = open_position['_id']
-                        self.mongo.open_positions.deleteOne({"_id": id})
-                            continue
+                        self.mongo.open_positions.delete_one({"_id": id})
+                        continue
                     key = open_position['Pre_Symbol']
                     open_position_keys.append(key)
 
@@ -104,9 +104,7 @@ class TDWebsocket:
 
             except Exception as e:
 
-                self.logger.error(
-                    f"ERROR UPDATING CURRENT PRICING - {e}")
-
+                continue
 
     async def work(self):
         while self.isAlive:
