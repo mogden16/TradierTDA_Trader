@@ -198,48 +198,52 @@ class Main(Tasks, TDWebsocket):
         for alert in alerts:
 
             if not IS_TESTING:
+                try:
+                    url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={alert['Symbol']}&contractType={alert['Option_Type']}&includeQuotes=FALSE&strike={alert['Strike_Price']}&fromDate={alert['Exp_Date']}&toDate={alert['Exp_Date']}"
+                    resp = list(self.traders.values())[0].tdameritrade.sendRequest(url)
+                    expdatemapkey = alert['Option_Type'].lower() + "ExpDateMap"
 
-                url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={alert['Symbol']}&contractType={alert['Option_Type']}&includeQuotes=FALSE&strike={alert['Strike_Price']}&fromDate={alert['Exp_Date']}&toDate={alert['Exp_Date']}"
-                resp = list(self.traders.values())[0].tdameritrade.sendRequest(url)
-                expdatemapkey = alert['Option_Type'].lower() + "ExpDateMap"
-
-                if list(resp.keys())[0] == "error" or resp['status'] == "FAILED":
-                    print(f'error scanning for {alert["Pre_Symbol"]}')
-                    print(resp)
-                    self.error += 1
-                    return
-
-                else:
-                    for dt in resp[expdatemapkey]:
-                        for strikePrice in resp[expdatemapkey][dt]:
-                            option_symbol = resp[expdatemapkey][dt][strikePrice][0]["symbol"]
-                            ask = resp[expdatemapkey][dt][strikePrice][0]["ask"]
-                            bid = resp[expdatemapkey][dt][strikePrice][0]["bid"]
-                            last = resp[expdatemapkey][dt][strikePrice][0]["last"]
-                            volume = resp[expdatemapkey][dt][strikePrice][0]["totalVolume"]
-                            delta = resp[expdatemapkey][dt][strikePrice][0]["delta"]
-                            oi = resp[expdatemapkey][dt][strikePrice][0]["openInterest"]
-                            print(f"\n FOUND --> {option_symbol} --> \n"
-                                  f"last={last} delta={delta} volume={volume} OI={oi} \n")
-
-                    if not TRADE_HEDGES and alert['HedgeAlert'] == "TRUE":
-                        print(f'Not trading {alert["Pre_Symbol"]}   hedge is True')
+                    if list(resp.keys())[0] == "error" or resp['status'] == "FAILED":
+                        print(f'error scanning for {alert["Pre_Symbol"]}')
+                        print(resp)
+                        self.error += 1
+                        return
 
                     else:
-                        if ask > config.MAX_OPTIONPRICE or ask < config.MIN_OPTIONPRICE or volume < config.MIN_VOLUME or abs(delta) < config.MIN_DELTA:
-                            message = f'Not trading {alert["Pre_Symbol"]}   ask is: {ask}   volume is: {volume}   delta is: {delta} '
-                            print(message)
+                        for dt in resp[expdatemapkey]:
+                            for strikePrice in resp[expdatemapkey][dt]:
+                                option_symbol = resp[expdatemapkey][dt][strikePrice][0]["symbol"]
+                                ask = float(resp[expdatemapkey][dt][strikePrice][0]["ask"])
+                                bid = float(resp[expdatemapkey][dt][strikePrice][0]["bid"])
+                                last = float(resp[expdatemapkey][dt][strikePrice][0]["last"])
+                                volume = float(resp[expdatemapkey][dt][strikePrice][0]["totalVolume"])
+                                delta = float(resp[expdatemapkey][dt][strikePrice][0]["delta"])
+                                oi = float(resp[expdatemapkey][dt][strikePrice][0]["openInterest"])
+                                print(f"\n FOUND --> {option_symbol} --> \n"
+                                      f"last={last} delta={delta} volume={volume} OI={oi} \n")
+
+                        if not TRADE_HEDGES and alert['HedgeAlert'] == "TRUE":
+                            print(f'Not trading {alert["Pre_Symbol"]}   hedge is True')
 
                         else:
-                            message = f'Bot just Queued {alert["Pre_Symbol"]}   ask is: {ask}   volume is: {volume}   delta is: {delta} '
-                            print(message)
-                            discord_helpers.send_discord_alert(message)
-                            c.OPTIONLIST.append(alert)
+                            if ask > config.MAX_OPTIONPRICE or ask < config.MIN_OPTIONPRICE or volume < config.MIN_VOLUME or abs(delta) < config.MIN_DELTA:
+                                message = f'Not trading {alert["Pre_Symbol"]}   ask is: {ask}   volume is: {volume}   delta is: {delta} '
+                                print(message)
 
-                    alert['Open_Interest'] = oi
-                    alert['Volume'] = volume
-                    alert['Entry_Price'] = bid
-                    mongo_helpers.set_mongo_analysisPosition(self, alert)
+                            else:
+                                message = f'Bot just Queued {alert["Pre_Symbol"]}   ask is: {ask}   volume is: {volume}   delta is: {delta} '
+                                print(message)
+                                discord_helpers.send_discord_alert(message)
+                                c.OPTIONLIST.append(alert)
+
+                        alert['Open_Interest'] = oi
+                        alert['Volume'] = volume
+                        alert['Entry_Price'] = bid
+                        mongo_helpers.set_mongo_analysisPosition(self, alert)
+
+                except Exception as e:
+
+                    logging.error(e)
 
             else:
 
@@ -480,7 +484,7 @@ class Main(Tasks, TDWebsocket):
                     disconnect = mongo_helpers.disconnect(self)
                     if disconnect:
                         message = f'Bot is shutting down, its currently: {current_time}'
-                        discord_helpers.send_discord_alert(message)
+                        # discord_helpers.send_discord_alert(message)
                         print(message)
 
             else:

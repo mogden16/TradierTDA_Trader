@@ -33,6 +33,8 @@ TEST_DISCORD = config.TEST_DISCORD
 TEST_CLOSED_POSITIONS = config.TEST_CLOSED_POSITIONS
 TEST_ANALYSIS_POSITIONS = config.TEST_ANALYSIS_POSITIONS
 POSITION_SIZE = config.POSITION_SIZE
+BACKTEST_RUNNER_FACTOR = config.BACKTEST_RUNNER_FACTOR
+TEST_RUNNING_STRATEGY = config.TEST_RUNNING_STRATEGY
 TIMEZONE = config.TIMEZONE
 
 BACKTESTLIST = []
@@ -43,11 +45,13 @@ TRAIL_STOP_PERCENTAGE_LIST = [.1, .15, .2, .25, .3, .5, 1]
 
 def try_parsing_date(text):
 
-    for fmt in ('%Y-%m-%dT%H:%M:%S.%f%z','%Y-%m-%dT%H:%M:%S%z'):
+    for fmt in ('%Y-%m-%dT%H:%M:%S.%f%z', '%Y-%m-%dT%H:%M:%S%z'):
         try:
-            return datetime.strptime(text,fmt)
+            return datetime.strptime(text, fmt)
+
         except ValueError:
             pass
+
     raise ValueError('no valid date format found')
 
 
@@ -277,14 +281,29 @@ def evaluateTakeProfit(path):
 
                     df, obj = optimizestrats.startDF(file)
 
-                    pl = optimizestrats.evalOCOorder(df, obj, take_profit_pct_factor,
+                    pl, index_end = optimizestrats.evalOCOorder(df, obj, take_profit_pct_factor,
                                                      stop_loss_pct_factor, position_size=POSITION_SIZE)
-                    if pl == None:
+                    if not pl:
                         continue
+
                     else:
                         pl['Take_Profit_Pct'] = take_profit_pct_factor * 100
                         pl['Stop_Loss_Pct'] = stop_loss_pct_factor * 100
                         runningPL.append(pl)
+
+                        if TEST_RUNNING_STRATEGY:
+                            if index_end != 0:
+                                df2, obj = optimizestrats.startDF(file, fix=True, index=index_end)
+                                pl_2, index_end = optimizestrats.evalOCOorder(df2, obj, take_profit_pct_factor,
+                                                                            stop_loss_pct_factor,
+                                                                            position_size=POSITION_SIZE*BACKTEST_RUNNER_FACTOR)
+                                if not pl_2:
+                                    continue
+
+                                else:
+                                    pl_2['Take_Profit_Pct'] = take_profit_pct_factor * 100
+                                    pl_2['Stop_Loss_Pct'] = stop_loss_pct_factor * 100
+                                    runningPL.append(pl_2)
 
                 except Exception:
 
@@ -299,7 +318,7 @@ def evaluateTakeProfit(path):
 
     MASTER_DF = MASTER_DF.sort_values(by=["Profit_minus_Fees"], ascending=False)
     print(MASTER_DF.head())
-    discord_helpers.send_discord_alert = f'{str(MASTER_DF.head(3))}'
+    discord_helpers.send_discord_alert(f'{str(MASTER_DF.head(3))}')
     MASTER_DF.to_excel('OCO_backtest.xlsx')
 
 
@@ -312,10 +331,11 @@ def run(trader):
     if check == False:
         createFolder()
 
-    # existing_dfs = findexistingDFs(path)
-    #
-    # for dataframe in existing_dfs:
-    #     EXISTINGDFLIST.append(dataframe)
+    existing_dfs = findexistingDFs(directory=path)
+
+    for dataframe in existing_dfs:
+        EXISTINGDFLIST.append(dataframe)
+
     if not TEST_DISCORD and not TEST_ANALYSIS_POSITIONS and not TEST_CLOSED_POSITIONS:
         print("You need to set one test group to 'True'")
         return
@@ -354,4 +374,4 @@ def run(trader):
 
     print('done')
 
-    return
+    return True
