@@ -175,7 +175,7 @@ class Main(Tasks, TDWebsocket):
 
         trade_alerts = []
         if RUN_DISCORD:
-            discord_alerts = discord_scanner.discord_messages(start_time, mins=1)
+            discord_alerts = discord_scanner.discord_messages(start_time, mins=2)
             if discord_alerts != None:
                 for alert in discord_alerts:
                     position = mongo_helpers.find_mongo_analysisPosition(self, alert['Pre_Symbol'], alert['Entry_Date'])
@@ -359,9 +359,9 @@ class Main(Tasks, TDWebsocket):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
         """
 
-        start_time = datetime.now(pytz.timezone(TIMEZONE))
+        self.start_time = datetime.now(pytz.timezone(TIMEZONE))
 
-        message = f'Bot is booting up, its currently: {start_time}'
+        message = f'Bot is booting up, its currently: {self.start_time}'
         discord_helpers.send_discord_alert(message)
         print(message)
 
@@ -375,7 +375,7 @@ class Main(Tasks, TDWebsocket):
             self.setupTraders()
 
             """  THIS WILL COMPILE THE ALERTS FROM DISCORD & GMAIL  """
-            trade_alerts = self.get_alerts(start_time)
+            trade_alerts = self.get_alerts(self.start_time)
 
             """  THIS WILL PUT ALL ALERTS INTO C.OPTIONLIST TO BE TRADED  """
             self.set_alerts(trade_alerts)
@@ -465,31 +465,39 @@ class Main(Tasks, TDWebsocket):
 
         while True:
 
-            current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
-            day = datetime.now(pytz.timezone(TIMEZONE)).strftime('%a')
-            weekends = ["Sat", "Sun"]
+            try:
 
-            if current_time < RUN_BACKTEST_TIME:
-                runBacktest = False
+                current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
+                day = datetime.now(pytz.timezone(TIMEZONE)).strftime('%a')
+                weekends = ["Sat", "Sun"]
 
-            if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
-                self.runTradingPlatform()
+                if current_time < RUN_BACKTEST_TIME:
+                    runBacktest = False
 
-            elif not runBacktest:
-                if TEST_CLOSED_POSITIONS or TEST_ANALYSIS_POSITIONS:
-                    self.connectALL()
-                study = backtest.run(self)
-                if study:
-                    runBacktest = True
-                    disconnect = mongo_helpers.disconnect(self)
-                    if disconnect:
-                        message = f'Bot is shutting down, its currently: {current_time}'
-                        # discord_helpers.send_discord_alert(message)
-                        print(message)
+                if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
+                    self.runTradingPlatform()
+
+                elif not runBacktest:
+                    if TEST_CLOSED_POSITIONS or TEST_ANALYSIS_POSITIONS:
+                        self.connectALL()
+                    study = backtest.run(self)
+                    if study:
+                        runBacktest = True
+                        disconnect = mongo_helpers.disconnect(self)
+                        if disconnect:
+                            message = f'Bot is shutting down, its currently: {current_time}'
+                            discord_helpers.send_discord_alert(message)
+                            print(message)
+
+                else:
+                    print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME}')
+                    time.sleep(10*60)
+
+            except:
+                pass
 
             else:
-                print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME}')
-                time.sleep(10*60)
+                break
 
 if __name__ == "__main__":
     """ START OF SCRIPT.

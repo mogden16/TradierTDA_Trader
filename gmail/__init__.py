@@ -9,7 +9,12 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 import os.path
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+import config
+import pytz
+
+TIMEZONE = config.TIMEZONE
+TURN_ON_TIME = config.TURN_ON_TIME
 
 THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
@@ -222,6 +227,18 @@ class Gmail:
 
         return trade_data
 
+    def convertTimestamp(self, tmstmp):
+
+        timestamp = int(tmstmp)
+
+        timestamp = datetime.fromtimestamp(timestamp / 1000)
+
+        timestamp = timestamp.replace(tzinfo=pytz.timezone(TIMEZONE))
+
+        timestamp = timestamp.strftime('%H:%M:%S')
+
+        return timestamp
+
     def getEmails(self):
         """ METHOD RETRIEVES EMAILS FROM INBOX, ADDS EMAIL TO TRASH FOLDER, AND ADD THEIR CONTENT TO payloads LIST TO BE EXTRACTED.
 
@@ -243,6 +260,16 @@ class Gmail:
 
                     result = self.service.users().messages().get(
                         id=message["id"], userId="me", format="metadata").execute()
+
+                    timestamp = self.convertTimestamp(result['internalDate'])
+
+                    """ DELETE ALL EMAILS PRIOR TO BOT STARTING"""
+                    if timestamp < TURN_ON_TIME:
+
+                        self.service.users().messages().trash(
+                            userId='me', id=message["id"]).execute()
+
+                        continue
 
                     for payload in result['payload']["headers"]:
 
