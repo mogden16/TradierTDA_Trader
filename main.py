@@ -496,8 +496,6 @@ class Main(Tasks, TDWebsocket):
             except:
                 pass
 
-            else:
-                break
 
 if __name__ == "__main__":
     """ START OF SCRIPT.
