@@ -400,7 +400,7 @@ class Main(Tasks, TDWebsocket):
                 disconnect = mongo_helpers.disconnect(self)
                 if disconnect:
                     connected = False
-                    message = f'Bot is shutting down, its currently: {start_time}'
+                    message = f'Bot is shutting down, its currently: {self.start_time}'
                     discord_helpers.send_discord_alert(message)
                     print(message)
                     break
@@ -416,8 +416,8 @@ class Main(Tasks, TDWebsocket):
 
                     for value in c.OPTIONLIST:
 
-                        signals = techanalysis.get_TA(value, api_trader)
-                        buy_signal = techanalysis.buy_criteria(signals)
+                        df, value = techanalysis.get_TA(value, api_trader)
+                        buy_signal = techanalysis.buy_criteria(df, value)
 
                         """  IF BUY SIGNAL == TRUE THEN BUY!  """
                         if buy_signal:
@@ -493,8 +493,11 @@ class Main(Tasks, TDWebsocket):
                     print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME}')
                     time.sleep(10*60)
 
-            except:
-                pass
+            except Exception as e:
+                message = f'Just received an error, check price updates are still happening: {e}'
+                discord_helpers.send_discord_alert(message)
+                print(message)
+                break
 
 
 if __name__ == "__main__":

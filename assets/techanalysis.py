@@ -4,141 +4,275 @@ import pandas as pd
 from pyti.hull_moving_average import hull_moving_average as hma
 import pandas_ta as ta
 import config
+import tech_config
+import pytz
+import mplfinance as mpf
+import numpy as np
 
-RUN_TA = config.RUN_TA
-RUN_30M_TA = config.RUN_30M_TA
+
+TIMEZONE = config.TIMEZONE
+TRADETYPE = tech_config.TRADETYPE.lower()
+STAMINA = tech_config.STAMINA.lower()
+LOOKAHEAD = tech_config.LOOKAHEAD.lower()
+EXITTYPE = tech_config.EXITTYPE.lower()
+ORDERPRICE = tech_config.ORDERPRICE.lower()
+OFFSET = int(tech_config.OFFSET)
+LUNCHSTART_TIME = tech_config.LUNCHSTART_TIME
+LUNCHSTOP_TIME = tech_config.LUNCHSTOP_TIME
+RSIPAINTTYPE = tech_config.RSIPAINTTYPE.lower()
+RSILENGTH = tech_config.RSILENGTH
+RSIAVERAGETYPE = tech_config.RSIAVERAGETYPE.lower()
+SMALLEST_AGGREGATION = tech_config.SMALLEST_AGGREGATION
+
+RSISUPEROVERSOLD = tech_config.RSISUPEROVERSOLD
+RSIOVERSOLD = tech_config.RSIOVERSOLD
+RSILOWNEUTRAL = tech_config.RSILOWNEUTRAL
+RSIHIGHNEUTRAL = tech_config.RSIHIGHNEUTRAL
+RSIOVERBOUGHT = tech_config.RSIOVERBOUGHT
+RSISUPEROVERBOUGHT = tech_config.RSISUPEROVERBOUGHT
+
+SMI_FAST = tech_config.SMI_FAST
+SMI_SLOW = tech_config.SMI_SLOW
+
+def checkActive():
+    current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
+
+    if STAMINA == "lunchbreak":
+        if "09:30:00" <= current_time <= LUNCHSTART_TIME or LUNCHSTOP_TIME <= current_time <= "16:00:00":
+            active = True
+        else:
+            active = False
+
+    elif STAMINA == "markethours":
+        if "09:30:00" <= current_time <= "16:00:00":
+            active = True
+        else:
+            active = False
+
+    else:
+        active = True
+
+    return active
 
 
-def get_TA(value, trader):
-    obj = {}
-    try:
-        symbol = value['Symbol']
-        pre_symbol = value['Pre_Symbol']
-        option_type = value['Option_Type']
+def scanRsi():
+    pass
 
-        endDate = int(datetime.now().timestamp()) * 1000
-        url = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/pricehistory?periodType=day&period=10&frequencyType=minute&frequency=10&endDate={endDate}"
-        resp = trader.tdameritrade.sendRequest(url)
-        df = pd.DataFrame(resp['candles'], columns=['open', 'high', 'low', 'close', 'volume', 'datetime'])
-        # print(resp)
-        # print(df)
-        fast = 9
-        slow = 18
-
-        df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
-        df['hma_fast'] = hma(df['close'], fast)
-        df['hma_slow'] = hma(df['close'], slow)
-
-        qqe_length = 6
-        qqe_smooth = 3
-        qqe_factor = 2.621
-        suffix = f'{qqe_length}_{qqe_smooth}_{qqe_factor}'
-        df_qqe = ta.qqe(df['close'], length=qqe_length, smooth=qqe_smooth, factor=qqe_factor)
-        qqe_column_name = f'QQE_{suffix}_RSIMA'
-        df = pd.concat([df, df_qqe], axis=1)
-
-        # df = df.set_index('datetime')
-
-        # apd = mpf.make_addplot(df['hma_fast'],type = 'line')
-        # apd = mpf.make_addplot(df['hma_slow], type='line')
-        # mpf.plot(df,type='candle',volume=True,tight_layout=True,title=symbol,block=False)
-        df['signalUP'] = df['hma_fast'] > df['hma_slow']
-        df['signalDN'] = df['hma_fast'] < df['hma_slow']
-
-        df2 = df.iloc[-2]
-        qqe_oversold = df2[f'{qqe_column_name}'] < 35
-        qqe_overbought = df2[f'{qqe_column_name}'] > 75
-        qqe_value = round(df2[f'{qqe_column_name}'], 2)
-        hullvalue_up = df2['signalUP']
-        hullvalue_dn = df2['signalDN']
-
-        obj = {
-            "Pre_Symbol": pre_symbol,
-            "Option_Type": option_type,
-            "hullvalue_up": hullvalue_up,
-            "hullvalue_dn": hullvalue_dn,
-            "qqe_value": qqe_value,
-            "qqe_overbought": qqe_overbought,
-            "qqe_oversold": qqe_oversold
+def set_aggregations():
+    if SMALLEST_AGGREGATION == 1:
+        aggs = {
+            "lowestAggregation": 1,
+            "middleAggregation": 5,
+            "highestAggregation": 10,
+            "extraHighAggregation": 15,
+            "xxlAggregation": 30
         }
+        return aggs
 
-        print(f'{pre_symbol} \n'
-              f'HullUP_5m: {hullvalue_up}  '
-              f'HullDN_5m: {hullvalue_dn}  '
-              f'QQE: {qqe_value}')
+    elif SMALLEST_AGGREGATION == 5:
+        aggs = {
+            "lowestAggregation": 5,
+            "middleAggregation": 10,
+            "highestAggregation": 15,
+            "extraHighAggregation": 30,
+            "xxlAggregation": None
+        }
+        return aggs
 
-        if RUN_30M_TA:
-            url2 = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/pricehistory?periodType=day&period=10&frequencyType=minute&frequency=30&endDate={endDate}"
-            resp = trader.tdameritrade.sendRequest(url2)
-            df_30m = pd.DataFrame(resp['candles'], columns=['open', 'high', 'low', 'close', 'volume', 'datetime'])
+    elif SMALLEST_AGGREGATION == 10:
+        aggs = {
+            "lowestAggregation": 10,
+            "middleAggregation": 15,
+            "highestAggregation": 30,
+            "extraHighAggregation": None,
+            "xxlAggregation": None
+        }
+        return aggs
 
-            fast = 9
-            slow = 18
+    elif SMALLEST_AGGREGATION == 15:
+        aggs = {
+            "lowestAggregation": 15,
+            "middleAggregation": 30,
+            "highestAggregation": None,
+            "extraHighAggregation": None,
+            "xxlAggregation": None
+        }
+        return aggs
 
-            df_30m['datetime'] = pd.to_datetime(df_30m['datetime'], unit='ms')
-            df_30m['hma_fast'] = hma(df_30m['close'], fast)
-            df_30m['hma_slow'] = hma(df_30m['close'], slow)
+    elif SMALLEST_AGGREGATION == 30:
+        aggs = {
+            "lowestAggregation": 30,
+            "middleAggregation": None,
+            "highestAggregation": None,
+            "extraHighAggregation": None,
+            "xxlAggregation": None
+        }
+        return aggs
 
-            df_30m = df_30m.set_index('datetime')
-            df_30m['signalUP'] = df_30m['hma_fast'] > df_30m['hma_slow']
-            df_30m['signalDN'] = df_30m['hma_fast'] < df_30m['hma_slow']
-
-            df2_30m = df_30m.iloc[-1]
-            hullvalue_up_30m = df2_30m['signalUP']
-            hullvalue_dn_30m = df2_30m['signalDN']
-
-            obj['hullvalue_up_30m'] = hullvalue_up_30m
-            obj['hullvalue_dn_30m'] = hullvalue_dn_30m
-
-            print(f'HullUP_30: {hullvalue_up_30m}  HullDN_30: {hullvalue_dn_30m} \n')
+    else:
+        print(f'SMALLEST_AGGREGATION IS {SMALLEST_AGGREGATION}: Cannot be larger than 30m')
 
 
+def get_pricehistory():
+    pass
 
 
-    except Exception:
+def calculate_averageDailyRange(value, trader):
+    symbol = value['Symbol']
+    endDate = int(datetime.now().timestamp()) * 1000
+    url = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/pricehistory?periodType=month&period=1&frequencyType=daily&frequency=1&endDate={endDate}"
+    resp = trader.tdameritrade.sendRequest(url)
+    df = pd.DataFrame(resp['candles'], columns=['open', 'high', 'low', 'close', 'volume', 'datetime'])
+    df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
+    df = df.set_index('datetime')
+    df['dayrange'] = df['high']-df['low']
+    dayrange = []
 
-        msg = f"error: {traceback.format_exc()}"
+    for i in range(1,12):
+        one_dayrange = df['high'][-i] - df['low'][-i]
+        dayrange.append(one_dayrange)
 
+    adr_10 = sum(dayrange[1:11])
+    adr_5 = sum(dayrange[1:6])
+
+    obj = {
+        "hl1": df['open'] + (adr_10/2),
+        "ll1": df['open'] - (adr_10/2),
+        "hl2": df['open'] + (adr_5/2),
+        "ll2": df['open'] - (adr_5/2)
+    }
 
     return obj
 
 
-def buy_criteria(signal):
-    """THIS METHOD WILL CHECK THE INDICATORS AND INDICATE A BUY (BUY = 1)"""
+def get_TA(value, trader):
 
-    hullvalue_up = signal['hullvalue_up']
-    hullvalue_dn = signal['hullvalue_dn']
-    qqe_overbought = signal['qqe_overbought']
-    qqe_oversold = signal['qqe_oversold']
-    if config.RUN_30M_TA:
-        hullvalue_up_30m = signal['hullvalue_up_30m']
-        hullvalue_dn_30m = signal['hullvalue_dn_30m']
+    adr = calculate_averageDailyRange(value, trader)
+    symbol = value['Symbol']
+    pre_symbol = value['Pre_Symbol']
+    option_type = value['Option_Type']
 
+    active = checkActive()
 
-    if signal['Option_Type'] == "CALL":
+    if active:
+        """ GET AGGREGATIONS"""
+        aggs = set_aggregations()
+        if aggs == None:
+            print(f'ERROR: Check your SMALLEST_AGGREGATION')
 
-        if config.RUN_30M_TA:
+        master_df = []
 
-            if hullvalue_up and not qqe_overbought and hullvalue_up_30m:
-                return True
+        for agg in aggs.values():
 
-        else:
-            if hullvalue_up and not qqe_overbought:
-                return True
+            if agg == None:
+                continue
 
-    elif signal['Option_Type'] == "PUT":
+            else:
+                """ GET PRICE HISTORY """
+                endDate = int(datetime.now().timestamp()) * 1000
+                url = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/pricehistory?periodType=day&period=10&frequencyType=minute&frequency={agg}&endDate={endDate}"
+                resp = trader.tdameritrade.sendRequest(url)
+                df = pd.DataFrame(resp['candles'], columns=['open', 'high', 'low', 'close', 'volume', 'datetime'])
+                df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
 
-        if config.RUN_30M_TA:
+                # df = pd.read_excel('Price_History.xlsx')
+                # df = df.iloc[:,:-6]
 
-            if hullvalue_dn and not qqe_oversold and hullvalue_dn_30m:
-                return True
+                df = df.set_index('datetime')
 
-        else:
+                """ HULL EMA """
+                df['hma_fast'] = hma(df['close'], tech_config.HULL_FAST)
+                df['hma_slow'] = hma(df['close'], tech_config.HULL_SLOW)
 
-            if hullvalue_dn and not qqe_oversold:
-                return True
+                """ QQE """
+                df_qqe = ta.qqe(df['close'], length=tech_config.QQE_RSI_PERIOD,
+                                smooth=tech_config.QQE_SLOW_FACTOR, factor=tech_config.QQE_SETTING)
 
-    else:
-        print('Cant get option type. Running into issue with runTA')
+                """ CREATE DATAFRAME """
+                df = pd.concat([df, df_qqe], axis=1)
+                pRsiMa = df.columns[-3]
+                pFastAtrRsiTL = df.columns[-4]
 
-    return False
+                """ BUY_CRITERIA """
+                " LONG "
+                df.loc[(df[pRsiMa] > df[pFastAtrRsiTL]) &
+                       (df[pRsiMa] > RSILOWNEUTRAL) &
+                       (df[pRsiMa] < RSISUPEROVERBOUGHT),
+                       'QQE_Long'] = 1
+
+                df['QQE_Long'] = df['QQE_Long'].replace(np.nan, 0)
+
+                df.loc[(df['QQE_Long'] == 1) &
+                       (df['QQE_Long'].shift(1) == 0),
+                       'Total_Long'] = 1
+
+                " SHORT "
+                df.loc[(df[pRsiMa] < df[pFastAtrRsiTL]) &
+                       (df[pRsiMa] < RSIHIGHNEUTRAL) &
+                       (df[pRsiMa] < RSISUPEROVERSOLD),
+                       'QQE_Short'] = 1
+
+                df['QQE_Short'] = df['QQE_Short'].replace(np.nan, 0)
+
+                df.loc[(df['QQE_Short'] == 1) &
+                       (df['QQE_Short'].shift(1) == 0),
+                       'Total_Short'] = 1
+
+                """ SHOW CHART """
+                df = df.iloc[-150:]
+
+                apd = [
+                    mpf.make_addplot(df[f'{pRsiMa}'],
+                                     type='line', color='green', panel=1),
+                    mpf.make_addplot(df[f'{pFastAtrRsiTL}'],
+                                     type='line', color='grey', panel=1),
+                    mpf.make_addplot(df[f'hma_slow'],
+                                     type='line', color='blue', panel=0),
+                    mpf.make_addplot(df[f'hma_fast'],
+                                     type='line', color='orange', panel=0),
+                    mpf.make_addplot(df['Total_Long'],
+                                     type='scatter', color='yellow', panel=1),
+                    mpf.make_addplot(df['Total_Short'],
+                                     type='scatter', color='orange', panel=1)
+                    ]
+
+                mpf.plot(
+                    df,
+                    type='candle',
+                    volume=True,
+                    title=f'{symbol}_{agg}',
+                    addplot=apd,
+                    main_panel=0,
+                    volume_panel=2,
+                    block=False
+
+                )
+
+                master_df.append(df)
+
+        return master_df, value
+
+def buy_criteria(df, value):
+    df = pd.DataFrame.from_dict(df)
+
+    if tech_config.LOOKAHEAD.upper() == "PREVBAR":
+        bar = df.iloc[-2]
+
+    elif tech_config.LOOKAHEAD.upper() == "CURRENTBAR":
+        bar = df.iloc[-1]
+
+    if value['Option_Type'].upper() == "CALL":
+        if bar['Total_Long'] == 1:
+            return True
+
+    elif value['Option_Type'].upper() == "PUT":
+        if bar['Total_Short'] == 1:
+            return True
+
+#
+#
+#
+#
+#
+#
+# runFlashTA()
