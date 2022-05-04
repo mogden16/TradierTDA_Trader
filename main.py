@@ -504,7 +504,7 @@ class Main(Tasks, TDWebsocket):
                             print(message)
 
                 else:
-                    print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME}')
+                    print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME} - current_time: {current_time}')
                     time.sleep(10*60)
 
             except Exception:
