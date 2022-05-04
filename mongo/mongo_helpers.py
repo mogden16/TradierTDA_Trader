@@ -102,6 +102,12 @@ def find_mongo_queue(trader, trade_symbol, timestamp):
     else:
         return False
 
+def close_mongo_position(trader, id):
+    trader.mongo.open_positions.update_one({"_id": id},
+                                           {"$set": {'childOrderStrategies.1.Order_Status': 'FILLED'}},
+                                           upsert=True)
+    return
+
 
 def disconnect(trader):
     try:

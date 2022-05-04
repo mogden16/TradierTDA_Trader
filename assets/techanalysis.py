@@ -58,6 +58,7 @@ def checkActive():
 def scanRsi():
     pass
 
+
 def set_aggregations():
     if SMALLEST_AGGREGATION == 1:
         aggs = {
@@ -73,7 +74,7 @@ def set_aggregations():
         aggs = {
             "lowestAggregation": 5,
             "middleAggregation": 10,
-            "highestAggregation": 15,
+            # "highestAggregation": 15,
             "extraHighAggregation": 30,
             "xxlAggregation": None
         }
@@ -125,6 +126,7 @@ def calculate_averageDailyRange(value, trader):
     df = pd.DataFrame(resp['candles'], columns=['open', 'high', 'low', 'close', 'volume', 'datetime'])
     df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
     df = df.set_index('datetime')
+
     df['dayrange'] = df['high']-df['low']
     dayrange = []
 
@@ -147,7 +149,6 @@ def calculate_averageDailyRange(value, trader):
 
 def get_TA(value, trader):
 
-    adr = calculate_averageDailyRange(value, trader)
     symbol = value['Symbol']
     pre_symbol = value['Pre_Symbol']
     option_type = value['Option_Type']
@@ -160,7 +161,7 @@ def get_TA(value, trader):
         if aggs == None:
             print(f'ERROR: Check your SMALLEST_AGGREGATION')
 
-        master_df = []
+        master_df = pd.DataFrame()
 
         for agg in aggs.values():
 
@@ -170,14 +171,15 @@ def get_TA(value, trader):
             else:
                 """ GET PRICE HISTORY """
                 endDate = int(datetime.now().timestamp()) * 1000
-                url = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/pricehistory?periodType=day&period=10&frequencyType=minute&frequency={agg}&endDate={endDate}"
+                if agg == 1:
+                    url = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/pricehistory?periodType=day&period=2&frequencyType=minute&frequency={agg}&endDate={endDate}"
+                elif agg == 5:
+                    url = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/pricehistory?periodType=day&period=3&frequencyType=minute&frequency={agg}&endDate={endDate}"
+                else:
+                    url = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/pricehistory?periodType=day&period=10&frequencyType=minute&frequency={agg}&endDate={endDate}"
                 resp = trader.tdameritrade.sendRequest(url)
                 df = pd.DataFrame(resp['candles'], columns=['open', 'high', 'low', 'close', 'volume', 'datetime'])
                 df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
-
-                # df = pd.read_excel('Price_History.xlsx')
-                # df = df.iloc[:,:-6]
-
                 df = df.set_index('datetime')
 
                 """ HULL EMA """
@@ -190,89 +192,139 @@ def get_TA(value, trader):
 
                 """ CREATE DATAFRAME """
                 df = pd.concat([df, df_qqe], axis=1)
-                pRsiMa = df.columns[-3]
-                pFastAtrRsiTL = df.columns[-4]
+                df['agg'] = agg
+                master_df = pd.concat([master_df, df], axis=0, ignore_index=False)
 
-                """ BUY_CRITERIA """
-                " LONG "
-                df.loc[(df[pRsiMa] > df[pFastAtrRsiTL]) &
-                       (df[pRsiMa] > RSILOWNEUTRAL) &
-                       (df[pRsiMa] < RSISUPEROVERBOUGHT),
-                       'QQE_Long'] = 1
+        return master_df
 
-                df['QQE_Long'] = df['QQE_Long'].replace(np.nan, 0)
 
-                df.loc[(df['QQE_Long'] == 1) &
-                       (df['QQE_Long'].shift(1) == 0),
-                       'Total_Long'] = 1
+def buy_criteria(df, value, trader):
+    symbol = value['Symbol']
 
-                " SHORT "
-                df.loc[(df[pRsiMa] < df[pFastAtrRsiTL]) &
-                       (df[pRsiMa] < RSIHIGHNEUTRAL) &
-                       (df[pRsiMa] < RSISUPEROVERSOLD),
-                       'QQE_Short'] = 1
+    agg_group = df.groupby('agg')
 
-                df['QQE_Short'] = df['QQE_Short'].replace(np.nan, 0)
+    if SMALLEST_AGGREGATION == 1:
+        df_1m = agg_group.get_group(1)
+        df_5m = agg_group.get_group(5)
+        df_10m = agg_group.get_group(10)
+        df_15m = agg_group.get_group(15)
+        df_30m = agg_group.get_group(30)
 
-                df.loc[(df['QQE_Short'] == 1) &
-                       (df['QQE_Short'].shift(1) == 0),
-                       'Total_Short'] = 1
+    elif SMALLEST_AGGREGATION == 5:
+        df_5m = agg_group.get_group(5)
+        df_10m = agg_group.get_group(10)
+        df_15m = agg_group.get_group(15)
+        df_30m = agg_group.get_group(30)
 
-                """ SHOW CHART """
-                df = df.iloc[-150:]
+    elif SMALLEST_AGGREGATION == 10:
+        df_10m = agg_group.get_group(10)
+        df_15m = agg_group.get_group(15)
+        df_30m = agg_group.get_group(30)
 
-                apd = [
-                    mpf.make_addplot(df[f'{pRsiMa}'],
-                                     type='line', color='green', panel=1),
-                    mpf.make_addplot(df[f'{pFastAtrRsiTL}'],
-                                     type='line', color='grey', panel=1),
-                    mpf.make_addplot(df[f'hma_slow'],
-                                     type='line', color='blue', panel=0),
-                    mpf.make_addplot(df[f'hma_fast'],
-                                     type='line', color='orange', panel=0),
-                    mpf.make_addplot(df['Total_Long'],
-                                     type='scatter', color='yellow', panel=1),
-                    mpf.make_addplot(df['Total_Short'],
-                                     type='scatter', color='orange', panel=1)
-                    ]
+    elif SMALLEST_AGGREGATION == 15:
+        df_15m = agg_group.get_group(15)
+        df_30m = agg_group.get_group(30)
 
-                mpf.plot(
-                    df,
-                    type='candle',
-                    volume=True,
-                    title=f'{symbol}_{agg}',
-                    addplot=apd,
-                    main_panel=0,
-                    volume_panel=2,
-                    block=False
+    elif SMALLEST_AGGREGATION == 30:
+        df_30m = agg_group.get_group(30)
 
-                )
+    pRsiMa = df.columns[-4]
+    pFastAtrRsiTL = df.columns[-5]
 
-                master_df.append(df)
+    # """ SHOW CHART """
+    # df_5m = df_5m.iloc[-150:]
+    # df_10m = df_10m.iloc[-150:]
+    # df_30m = df_30m.iloc[-150:]
+    #
+    # apd = [
+    #     mpf.make_addplot(df_5m[f'{pRsiMa}'],
+    #                      type='line', color='green', panel=1),
+    #     mpf.make_addplot(df_5m[f'{pFastAtrRsiTL}'],
+    #                      type='line', color='grey', panel=1),
+    #     mpf.make_addplot(df_5m[f'hma_fast'],
+    #                      type='line', color='green', panel=0),
+    #     mpf.make_addplot(df_5m[f'hma_slow'],
+    #                      type='line', color='grey', panel=0)
+    #     ]
+    # ape = [
+    #     mpf.make_addplot(df_10m[f'{pRsiMa}'],
+    #                      type='line', color='green', panel=1),
+    #     mpf.make_addplot(df_10m[f'{pFastAtrRsiTL}'],
+    #                      type='line', color='grey', panel=1),
+    #     mpf.make_addplot(df_10m[f'hma_fast'],
+    #                      type='line', color='green', panel=0),
+    #     mpf.make_addplot(df_10m[f'hma_slow'],
+    #                      type='line', color='grey', panel=0)
+    #     ]
+    # apf = [
+    #     mpf.make_addplot(df_30m[f'{pRsiMa}'],
+    #                      type='line', color='green', panel=1),
+    #     mpf.make_addplot(df_30m[f'{pFastAtrRsiTL}'],
+    #                      type='line', color='grey', panel=1),
+    #     mpf.make_addplot(df_30m[f'hma_fast'],
+    #                      type='line', color='green', panel=0),
+    #     mpf.make_addplot(df_30m[f'hma_slow'],
+    #                      type='line', color='grey', panel=0)
+    # ]
+    #
+    # mpf.plot(
+    #     df_5m,type='candle', volume=True, title=f'{symbol}_5', addplot=apd, main_panel=0, volume_panel=2, block=False
+    # )
+    # mpf.plot(
+    #     df_10m,type='candle', volume=True, title=f'{symbol}_10', addplot=ape, main_panel=0, volume_panel=2, block=False
+    # )
+    # mpf.plot(
+    #     df_30m, type='candle', volume=True, title=f'{symbol}_30', addplot=apf, main_panel=0, volume_panel=2, block=False
+    # )
 
-        return master_df, value
-
-def buy_criteria(df, value):
-    df = pd.DataFrame.from_dict(df)
-
-    if tech_config.LOOKAHEAD.upper() == "PREVBAR":
-        bar = df.iloc[-2]
-
-    elif tech_config.LOOKAHEAD.upper() == "CURRENTBAR":
-        bar = df.iloc[-1]
+    """ RUN STRATEGY """
+    last_5m_bar = df_5m.iloc[-2]
+    current_10m_bar = df_10m.iloc[-1]
+    current_30m_bar = df_30m.iloc[-1]
 
     if value['Option_Type'].upper() == "CALL":
-        if bar['Total_Long'] == 1:
+
+        if (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and (current_30m_bar[pRsiMa] > RSILOWNEUTRAL):
+            return True
+
+        else:
+            adr = calculate_averageDailyRange(value, trader)
+            if (adr['ll1'] <= current_10m_bar['close'] <= adr['ll2']) and (current_30m_bar[pRsiMa] > RSIHIGHNEUTRAL):
+                return True
+
+    elif value['Option_Type'].upper() == "PUT":
+
+        if (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and (current_30m_bar[pRsiMa] < RSIHIGHNEUTRAL):
+            return True
+
+        else:
+            adr = calculate_averageDailyRange(value, trader)
+            if (adr['hl1'] <= current_10m_bar['close'] <= adr['hl2']) and (current_30m_bar[pRsiMa] < RSILOWNEUTRAL):
+                return True
+
+
+def sell_criteria(df, value):
+
+    symbol = value['Symbol']
+
+    agg_group = df.groupby('agg')
+
+    if SMALLEST_AGGREGATION == 5:
+        df_5m = agg_group.get_group(5)
+        df_10m = agg_group.get_group(10)
+        df_30m = agg_group.get_group(30)
+
+    last_5m_bar = df_5m.iloc[-2]
+    current_10m_bar = df_10m.iloc[-1]
+    last_10m_bar = df_10m.iloc[-2]
+    current_30m_bar = df_30m.iloc[-1]
+
+    if value['Option_Type'].upper() == "CALL":
+
+        if last_10m_bar['hma_fast'] < last_10m_bar['hma_slow']:
             return True
 
     elif value['Option_Type'].upper() == "PUT":
-        if bar['Total_Short'] == 1:
-            return True
 
-#
-#
-#
-#
-#
-#
-# runFlashTA()
+        if last_10m_bar['hma_fast'] > last_10m_bar['hma_slow']:
+            return True

@@ -284,6 +284,7 @@ class Gmail:
         except Exception as e:
 
             self.logger.error(f"{__class__.__name__} - {e}")
+            pass
 
         finally:
 

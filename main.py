@@ -2,6 +2,7 @@
 import time
 import logging
 import os
+import traceback
 
 import config
 from datetime import datetime
@@ -416,8 +417,8 @@ class Main(Tasks, TDWebsocket):
 
                     for value in c.OPTIONLIST:
 
-                        df, value = techanalysis.get_TA(value, api_trader)
-                        buy_signal = techanalysis.buy_criteria(df, value)
+                        df = techanalysis.get_TA(value, api_trader)
+                        buy_signal = techanalysis.buy_criteria(df, value, api_trader)
 
                         """  IF BUY SIGNAL == TRUE THEN BUY!  """
                         if buy_signal:
@@ -448,11 +449,24 @@ class Main(Tasks, TDWebsocket):
             if RUN_WEBSOCKET:
                 streamprice.streamPrice(self)
 
+            """
+            RUN SELL_TA CRITERIA
+            """
+            if config.RUN_SELL_TA:
+                for api_trader in self.traders.values():
+                    open_positions = mongo_helpers.get_mongo_openPositions(self)
+                    for open_position in open_positions:
+                        df = techanalysis.get_TA(open_position, api_trader)
+                        sell_signal = techanalysis.sell_criteria(df, open_position)
+                        if sell_signal:
+                            mongo_helpers.close_mongo_position(self, open_position['_id'])
+
             """  THIS KEEPS TRACK OF ANY TIME THE API GETS AN ERROR. 
             IF ERRORS ARE > 10, YOU MIGHT WANT TO CHECK OUT YOUR REQUESTS  """
             if self.error > 0:
                 print(f'errors: {self.error}')
                 if self.error >= 60:
+                    discord_helpers.send_discord_alert(f'self.errors: {self.error}')
                     c.OPTIONLIST.clear()
                     self.error = 0
 
@@ -493,8 +507,8 @@ class Main(Tasks, TDWebsocket):
                     print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME}')
                     time.sleep(10*60)
 
-            except Exception as e:
-                message = f'Just received an error, check price updates are still happening: {e}'
+            except Exception:
+                message = f"Just received an error: {traceback.format_exc()}"
                 discord_helpers.send_discord_alert(message)
                 print(message)
                 break
