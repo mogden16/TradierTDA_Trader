@@ -74,7 +74,7 @@ def set_aggregations():
         aggs = {
             "lowestAggregation": 5,
             "middleAggregation": 10,
-            # "highestAggregation": 15,
+            "highestAggregation": 15,
             "extraHighAggregation": 30,
             "xxlAggregation": None
         }
