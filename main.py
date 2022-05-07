@@ -457,16 +457,18 @@ class Main(Tasks, TDWebsocket):
 
                 """  LEFT OVER ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA  """
                 for api_trader in self.traders.values():
+                    if len(c.OPTIONLIST) == 0:
+                        pass
+                    else:
+                        for value in tqdm(c.OPTIONLIST, desc="Scanning BUY signals..."):
 
-                    for value in tqdm(c.OPTIONLIST, desc="Scanning BUY signals..."):
+                            df = techanalysis.get_TA(value, api_trader)
+                            buy_signal = techanalysis.buy_criteria(df, value, api_trader)
 
-                        df = techanalysis.get_TA(value, api_trader)
-                        buy_signal = techanalysis.buy_criteria(df, value, api_trader)
-
-                        """  IF BUY SIGNAL == TRUE THEN BUY!  """
-                        if buy_signal:
-                            self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
-                            c.DONTTRADELIST.append(value)
+                            """  IF BUY SIGNAL == TRUE THEN BUY!  """
+                            if buy_signal:
+                                self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
+                                c.DONTTRADELIST.append(value)
 
             else:
                 buy_signal = True
@@ -486,19 +488,22 @@ class Main(Tasks, TDWebsocket):
             if config.RUN_SELL_TA:
                 for api_trader in self.traders.values():
                     open_positions = mongo_helpers.get_mongo_openPositions(self)
-                    for open_position in tqdm(open_positions,desc="Scanning SELL signals..."):
-                        df = techanalysis.get_TA(open_position, api_trader)
-                        sell_signal = techanalysis.sell_criteria(df, open_position)
-                        if sell_signal:
-                            if RUN_LIVE_TRADER:
-                                pass
-                                # if RUN_TRADIER:
-                                #     self.tradier.cancelALLorders()
-                                # open_positions = mongo_helpers.get_mongo_openPositions(self)
-                                # for open_position in open_positions:
-                                #     self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
-                            else:
-                                mongo_helpers.close_mongo_position(self, open_position['_id'])
+                    if len(open_positions) == 0:
+                        pass
+                    else:
+                        for open_position in tqdm(open_positions,desc="Scanning SELL signals..."):
+                            df = techanalysis.get_TA(open_position, api_trader)
+                            sell_signal = techanalysis.sell_criteria(df, open_position)
+                            if sell_signal:
+                                if RUN_LIVE_TRADER:
+                                    pass
+                                    # if RUN_TRADIER:
+                                    #     self.tradier.cancelALLorders()
+                                    # open_positions = mongo_helpers.get_mongo_openPositions(self)
+                                    # for open_position in open_positions:
+                                    #     self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                                else:
+                                    mongo_helpers.close_mongo_position(self, open_position['_id'])
 
             """  CHECK ON ALL ORDER STATUSES  """
             if RUN_TRADIER:
