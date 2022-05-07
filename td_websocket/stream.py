@@ -10,6 +10,7 @@ import config
 import pandas as pd
 import time
 import tracemalloc
+import constants as c
 
 tracemalloc.start()
 ca = certifi.where()
@@ -55,10 +56,6 @@ class TDWebsocket:
                 await asyncio.sleep(.5)
             else:
                 for open_position in open_positions:
-                    if "Pre_Symbol" not in open_position.keys():
-                        id = open_position['_id']
-                        self.mongo.open_positions.delete_one({"_id": id})
-                        continue
                     key = open_position['Pre_Symbol']
                     open_position_keys.append(key)
 
@@ -68,7 +65,8 @@ class TDWebsocket:
                 # print(open_position_keys)
 
                 if self.open_position_keys != open_position_keys:
-                    # print('stopping')
+                    self.open_position_keys = []
+                    c.OPEN_POSITION_KEYS = []
                     loop.stop()
 
             await asyncio.sleep(1)
@@ -80,10 +78,10 @@ class TDWebsocket:
             print(f'\n ========Running stream======== \n')
             await asyncio.sleep(HEARTBEAT_SETTING)
 
-    def print_message(self,message):
+    def print_message(self, message):
 
         orderflow_dict = json.loads(json.dumps(message, indent=4))
-        df = pd.DataFrame(orderflow_dict['content'],columns=['key', 'BID_PRICE', 'ASK_PRICE', 'LAST_PRICE'])
+        df = pd.DataFrame(orderflow_dict['content'], columns=['key', 'BID_PRICE', 'ASK_PRICE', 'LAST_PRICE'])
         df = df.set_index('key')
         df = df.fillna(0)
         # print(df)

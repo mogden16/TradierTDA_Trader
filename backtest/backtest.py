@@ -294,9 +294,7 @@ def evaluateTakeProfit(path):
                         if TEST_RUNNING_STRATEGY:
                             if index_end != 0:
                                 df2, obj = optimizestrats.startDF(file, fix=True, index=index_end)
-                                pl_2, index_end = optimizestrats.evalOCOorder(df2, obj, take_profit_pct_factor,
-                                                                            stop_loss_pct_factor,
-                                                                            position_size=POSITION_SIZE*BACKTEST_RUNNER_FACTOR)
+                                pl_2, index_end = optimizestrats.evalOCOorder(df2, obj, take_profit_pct_factor, stop_loss_pct_factor, position_size=POSITION_SIZE*BACKTEST_RUNNER_FACTOR)
                                 if not pl_2:
                                     continue
 
@@ -331,42 +329,42 @@ def run(trader):
     if check == False:
         createFolder()
 
-    existing_dfs = findexistingDFs(directory=path)
-
-    for dataframe in existing_dfs:
-        EXISTINGDFLIST.append(dataframe)
-
-    if not TEST_DISCORD and not TEST_ANALYSIS_POSITIONS and not TEST_CLOSED_POSITIONS:
-        print("You need to set one test group to 'True'")
-        return
-
-    if TEST_DISCORD:
-        discord_alerts = discord_scanner.discord_messages(start_time, mins=60*24*LOOKBACK_DAYS)  # Convert to mins
-        if not discord_alerts:
-            return
-
-        for alert in discord_alerts:
-            BACKTESTLIST.append(alert)
-
-    if TEST_ANALYSIS_POSITIONS:
-        analysis_alerts = find_analysis_positions(trader, start_time, LOOKBACK_DAYS)
-        if not analysis_alerts:
-            return
-
-        for alert in analysis_alerts:
-            BACKTESTLIST.append(alert)
-
-    elif TEST_CLOSED_POSITIONS:
-        closed_alerts = find_closed_positions(trader, start_time, LOOKBACK_DAYS)
-        if not closed_alerts:
-            return
-
-        for alert in closed_alerts:
-            BACKTESTLIST.append(alert)
-
-    grabDataframes()
-
-    movexlsx(path)
+    # existing_dfs = findexistingDFs(directory=path)
+    #
+    # for dataframe in existing_dfs:
+    #     EXISTINGDFLIST.append(dataframe)
+    #
+    # if not TEST_DISCORD and not TEST_ANALYSIS_POSITIONS and not TEST_CLOSED_POSITIONS:
+    #     print("You need to set one test group to 'True'")
+    #     return
+    #
+    # if TEST_DISCORD:
+    #     discord_alerts = discord_scanner.discord_messages(start_time, mins=60*24*LOOKBACK_DAYS)  # Convert to mins
+    #     if not discord_alerts:
+    #         return
+    #
+    #     for alert in discord_alerts:
+    #         BACKTESTLIST.append(alert)
+    #
+    # if TEST_ANALYSIS_POSITIONS:
+    #     analysis_alerts = find_analysis_positions(trader, start_time, LOOKBACK_DAYS)
+    #     if not analysis_alerts:
+    #         return
+    #
+    #     for alert in analysis_alerts:
+    #         BACKTESTLIST.append(alert)
+    #
+    # elif TEST_CLOSED_POSITIONS:
+    #     closed_alerts = find_closed_positions(trader, start_time, LOOKBACK_DAYS)
+    #     if not closed_alerts:
+    #         return
+    #
+    #     for alert in closed_alerts:
+    #         BACKTESTLIST.append(alert)
+    #
+    # grabDataframes()
+    #
+    # movexlsx(path)
 
     evaluateTakeProfit(path)
 

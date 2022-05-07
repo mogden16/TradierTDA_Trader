@@ -1,5 +1,6 @@
 # imports
 from assets.helper_functions import getDatetime
+from discord import discord_helpers
 import os
 import config
 import traceback
@@ -129,6 +130,13 @@ class OrderBuilder:
 
             price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
 
+            if price > config.MAX_OPTIONPRICE or price < config.MIN_OPTIONPRICE:
+                message = (f'actual price of option: {trade_data["Pre_Symbol"]} is outside of '
+                           f'price setting on config.py')
+                print(message)
+                discord_helpers.send_discord_alert(message)
+                return
+
         else:
 
             try:
@@ -145,11 +153,17 @@ class OrderBuilder:
                     else:
                         price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
 
-
                 if list(resp.keys())[0] == "error":
                     print(f'error scanning for {symbol}') if asset_type == "EQUITY" else (
                         f'error scanning for {trade_data["Pre_Symbol"]}')
                     self.error += 1
+                    return
+
+                elif price > config.MAX_OPTIONPRICE or price < config.MIN_OPTIONPRICE:
+                    message = (f'actual price of option: {trade_data["Pre_Symbol"]} is outside of '
+                               f'price setting on config.py')
+                    print(message)
+                    discord_helpers.send_discord_alert(message)
                     return
 
             except Exception:

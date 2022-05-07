@@ -8,6 +8,7 @@ import tech_config
 import pytz
 import mplfinance as mpf
 import numpy as np
+from discord import discord_helpers
 
 
 TIMEZONE = config.TIMEZONE
@@ -127,24 +128,16 @@ def calculate_averageDailyRange(value, trader):
     df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
     df = df.set_index('datetime')
 
-    df['dayrange'] = df['high']-df['low']
-    dayrange = []
+    df['dr_pct'] = df.apply(lambda x: 100 * (x['high'] / x['low'] - 1), axis=1)
+    df['ADR_10'] = df['dr_pct'].rolling(window=10).mean()
+    df['ADR_5'] = df['dr_pct'].rolling(window=5).mean()
 
-    for i in range(1,12):
-        one_dayrange = df['high'][-i] - df['low'][-i]
-        dayrange.append(one_dayrange)
+    df['hl1'] = df['open'] + (df['ADR_10'] / 2)
+    df['ll1'] = df['open'] - (df['ADR_10'] / 2)
+    df['hl2'] = df['open'] + (df['ADR_5'] / 2)
+    df['ll2'] = df['open'] - (df['ADR_5'] / 2)
 
-    adr_10 = sum(dayrange[1:11])
-    adr_5 = sum(dayrange[1:6])
-
-    obj = {
-        "hl1": df['open'] + (adr_10/2),
-        "ll1": df['open'] - (adr_10/2),
-        "hl2": df['open'] + (adr_5/2),
-        "ll2": df['open'] - (adr_5/2)
-    }
-
-    return obj
+    return df
 
 
 def get_TA(value, trader):
@@ -278,28 +271,47 @@ def buy_criteria(df, value, trader):
     # )
 
     """ RUN STRATEGY """
+    adr = calculate_averageDailyRange(value, trader)
+    twolast_5m_bar = df_5m.iloc[-3]
     last_5m_bar = df_5m.iloc[-2]
     current_10m_bar = df_10m.iloc[-1]
     current_30m_bar = df_30m.iloc[-1]
+    current_adr = adr.iloc[-1]
 
     if value['Option_Type'].upper() == "CALL":
 
-        if (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and (current_30m_bar[pRsiMa] > RSILOWNEUTRAL):
+        if (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and \
+                (twolast_5m_bar[pRsiMa] < twolast_5m_bar[pFastAtrRsiTL]) and \
+                (current_30m_bar[pRsiMa] > RSILOWNEUTRAL) and \
+                (last_5m_bar['hma_fast'] >= last_5m_bar['hma_slow']):
+            message = f"Buying CALL because QQE Cross UP & Current 30m QQE is above 45"
+            discord_helpers.send_discord_alert(message)
+            print(message)
             return True
 
         else:
-            adr = calculate_averageDailyRange(value, trader)
-            if (adr['ll1'] <= current_10m_bar['close'] <= adr['ll2']) and (current_30m_bar[pRsiMa] > RSIHIGHNEUTRAL):
+            if (current_adr['ll1'] <= current_10m_bar['close'] <= current_adr['ll2']) and (current_30m_bar[pRsiMa] > RSIHIGHNEUTRAL):
+                message = f"Buying because CALL is at bottom of ADR & 30m QQE is over 55"
+                discord_helpers.send_discord_alert(message)
+                print(message)
                 return True
 
     elif value['Option_Type'].upper() == "PUT":
 
-        if (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and (current_30m_bar[pRsiMa] < RSIHIGHNEUTRAL):
+        if (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and \
+                (twolast_5m_bar[pRsiMa] > twolast_5m_bar[pFastAtrRsiTL]) and \
+                (current_30m_bar[pRsiMa] < RSIHIGHNEUTRAL) and \
+                (last_5m_bar['hma_fast'] <= last_5m_bar['hma_slow']):
+            message = f"Buying PUT because QQE Cross DOWN & Current 30m QQE is below 55"
+            discord_helpers.send_discord_alert(message)
+            print(message)
             return True
 
         else:
-            adr = calculate_averageDailyRange(value, trader)
-            if (adr['hl1'] <= current_10m_bar['close'] <= adr['hl2']) and (current_30m_bar[pRsiMa] < RSILOWNEUTRAL):
+            if (current_adr['hl1'] <= current_10m_bar['close'] <= current_adr['hl2']) and (current_30m_bar[pRsiMa] < RSILOWNEUTRAL):
+                message = f"Buying because PUT is at top of ADR & 30m QQE is below 45"
+                discord_helpers.send_discord_alert(message)
+                print(message)
                 return True
 
 
@@ -321,10 +333,12 @@ def sell_criteria(df, value):
 
     if value['Option_Type'].upper() == "CALL":
 
-        if last_10m_bar['hma_fast'] < last_10m_bar['hma_slow']:
+        if last_5m_bar['hma_fast'] < last_5m_bar['hma_slow']:
             return True
 
     elif value['Option_Type'].upper() == "PUT":
 
-        if last_10m_bar['hma_fast'] > last_10m_bar['hma_slow']:
+        if last_5m_bar['hma_fast'] > last_5m_bar['hma_slow']:
             return True
+
+

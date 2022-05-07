@@ -70,7 +70,7 @@ def evalOCOorder(df, obj, take_profit_pct_factor, stop_loss_pct_factor, position
 
         entry_date = entry['t']
 
-        entry_price = entry['c']
+        entry_price = entry['o']
 
         if entry_price < MIN_OPTIONPRICE_BACKTEST or entry_price > MAX_OPTIONPRICE_BACKTEST:
             return
@@ -109,7 +109,7 @@ def evalOCOorder(df, obj, take_profit_pct_factor, stop_loss_pct_factor, position
             obj['Fees'] = fees
             obj['Profit_minus_Fees'] = profit - fees
 
-            return obj
+            return obj, index
 
         elif row['l'] <= stoploss_price and open_order:
 
@@ -131,7 +131,7 @@ def evalOCOorder(df, obj, take_profit_pct_factor, stop_loss_pct_factor, position
             obj['Fees'] = fees
             obj['Profit_minus_Fees'] = profit - fees
 
-            return obj
+            return obj, index
 
         elif index == (len(df.index)-1) and open_order:
             """  SOLD AT EndOfDay  """
@@ -168,7 +168,7 @@ def evalOCOorder(df, obj, take_profit_pct_factor, stop_loss_pct_factor, position
                 obj['Fees'] = fees
                 obj['Profit_minus_Fees'] = profit - fees
 
-            return obj
+            return obj, index
 
 
 def evalTRAILorder(df, obj, trail_stop_pct_factor, position_size):

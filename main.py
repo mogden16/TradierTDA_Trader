@@ -17,6 +17,7 @@ from gmail import Gmail
 from mongo import MongoDB, mongo_helpers
 from tradier import TradierTrader
 from threading import Thread
+from tqdm import tqdm
 
 from assets import pushsafer, helper_functions, techanalysis, streamprice
 from assets.exception_handler import exception_handler
@@ -43,6 +44,7 @@ RUN_TASKS = config.RUN_TASKS
 RUN_BACKTEST_TIME = config.RUN_BACKTEST_TIME
 TEST_CLOSED_POSITIONS = config.TEST_CLOSED_POSITIONS
 TEST_ANALYSIS_POSITIONS = config.TEST_ANALYSIS_POSITIONS
+
 
 class Main(Tasks, TDWebsocket):
 
@@ -97,7 +99,6 @@ class Main(Tasks, TDWebsocket):
             self.gmail = None
 
         if mongo_connected:
-
             self.traders = {}
 
             self.accounts = []
@@ -113,7 +114,7 @@ class Main(Tasks, TDWebsocket):
         """ METHOD GETS ALL USERS ACCOUNTS FROM MONGO AND CREATES LIVE TRADER INSTANCES FOR THOSE ACCOUNTS.
             IF ACCOUNT INSTANCE ALREADY IN SELF.TRADERS DICT, THEN ACCOUNT INSTANCE WILL NOT BE CREATED AGAIN.
         """
-       # GET ALL USERS ACCOUNTS
+        # GET ALL USERS ACCOUNTS
         users = self.mongo.users.find({})
 
         for user in users:
@@ -199,16 +200,23 @@ class Main(Tasks, TDWebsocket):
         for alert in alerts:
 
             if not IS_TESTING:
+
                 try:
-                    url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={alert['Symbol']}&contractType={alert['Option_Type']}&includeQuotes=FALSE&strike={alert['Strike_Price']}&fromDate={alert['Exp_Date']}&toDate={alert['Exp_Date']}"
+                    url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={alert['Symbol']}&" \
+                          f"contractType={alert['Option_Type']}&" \
+                          f"includeQuotes=FALSE&" \
+                          f"strike={alert['Strike_Price']}&" \
+                          f"fromDate={alert['Exp_Date']}&" \
+                          f"toDate={alert['Exp_Date']}"
                     resp = list(self.traders.values())[0].tdameritrade.sendRequest(url)
                     expdatemapkey = alert['Option_Type'].lower() + "ExpDateMap"
 
                     if list(resp.keys())[0] == "error" or resp['status'] == "FAILED":
                         print(f'error scanning for {alert["Pre_Symbol"]}')
-                        print(resp)
+                        # print(resp)
                         self.error += 1
-                        return
+                        c.DONTTRADELIST.append(alert)
+                        continue
 
                     else:
                         for dt in resp[expdatemapkey]:
@@ -220,22 +228,47 @@ class Main(Tasks, TDWebsocket):
                                 volume = float(resp[expdatemapkey][dt][strikePrice][0]["totalVolume"])
                                 delta = float(resp[expdatemapkey][dt][strikePrice][0]["delta"])
                                 oi = float(resp[expdatemapkey][dt][strikePrice][0]["openInterest"])
-                                print(f"\n FOUND --> {option_symbol} --> \n"
-                                      f"last={last} delta={delta} volume={volume} OI={oi} \n")
+                                # print(f"\n FOUND --> {option_symbol} --> \n"
+                                #       f"last={last} delta={delta} volume={volume} OI={oi} \n")
 
                         if not TRADE_HEDGES and alert['HedgeAlert'] == "TRUE":
                             print(f'Not trading {alert["Pre_Symbol"]}   hedge is True')
 
                         else:
-                            if ask > config.MAX_OPTIONPRICE or ask < config.MIN_OPTIONPRICE or volume < config.MIN_VOLUME or abs(delta) < config.MIN_DELTA:
+                            if ask > config.MAX_OPTIONPRICE or ask < config.MIN_OPTIONPRICE or volume < config.MIN_VOLUME \
+                                    or abs(delta) < config.MIN_DELTA:
                                 message = f'Not trading {alert["Pre_Symbol"]}   ask is: {ask}   volume is: {volume}   delta is: {delta} '
                                 print(message)
 
                             else:
-                                message = f'Bot just Queued {alert["Pre_Symbol"]}   ask is: {ask}   volume is: {volume}   delta is: {delta} '
+                                """ 
+                                WE'RE DECIDING WHETHER OR NOT TO BUY IT RIGHT HERE 
+                                """
+
+                                message = f"\n FOUND --> {option_symbol} --> \n" \
+                                          f"last={last} delta={delta} volume={volume} OI={oi} \n"
                                 print(message)
-                                discord_helpers.send_discord_alert(message)
-                                c.OPTIONLIST.append(alert)
+                                # discord_helpers.send_discord_alert(message)
+                                if config.RUN_TA:
+
+                                    """  ALL ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA  """
+                                    for api_trader in self.traders.values():
+                                        df = techanalysis.get_TA(alert, api_trader)
+                                        buy_signal = techanalysis.buy_criteria(df, alert, api_trader)
+
+                                        """  IF BUY SIGNAL == TRUE THEN BUY!  """
+                                        if buy_signal:
+                                            c.OPTIONLIST.append(alert)
+                                            self.set_trader(alert, trade_signal="BUY", trade_type="LIMIT")
+                                            c.DONTTRADELIST.append(alert)
+                                        else:
+                                            c.OPTIONLIST.append(alert)
+
+                                else:
+                                    buy_signal = True
+                                    c.OPTIONLIST.append(alert)
+                                    self.set_trader(alert, trade_signal="BUY", trade_type="LIMIT")
+                                    c.DONTTRADELIST.append(alert)
 
                         alert['Open_Interest'] = oi
                         alert['Volume'] = volume
@@ -263,7 +296,6 @@ class Main(Tasks, TDWebsocket):
                     print(f'testing: would have sent to mongo Analysis')
 
                     c.OPTIONLIST.append(alert)
-
 
     @exception_handler
     def get_tradeFormat(self, live_trader, value, signal_type, trade_type, isRunner):
@@ -293,7 +325,12 @@ class Main(Tasks, TDWebsocket):
 
         elif signal_type == "BUY":
             if not IS_TESTING:
-                url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={value['Symbol']}&contractType={value['Option_Type']}&includeQuotes=FALSE&strike={value['Strike_Price']}&fromDate={value['Exp_Date']}&toDate={value['Exp_Date']}"
+                url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={value['Symbol']}&" \
+                      f"contractType={value['Option_Type']}&" \
+                      f"includeQuotes=FALSE&" \
+                      f"strike={value['Strike_Price']}&" \
+                      f"fromDate={value['Exp_Date']}&" \
+                      f"toDate={value['Exp_Date']}"
                 resp = live_trader.tdameritrade.sendRequest(url)
                 expdatemapkey = value['Option_Type'].lower() + "ExpDateMap"
                 if list(resp.keys())[0] == "error" or list(resp.values())[1] == "FAILED":
@@ -331,7 +368,6 @@ class Main(Tasks, TDWebsocket):
 
         return trade_data
 
-
     @exception_handler
     def set_trader(self, value, trade_signal, trade_type="LIMIT", **kwargs):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
@@ -344,7 +380,8 @@ class Main(Tasks, TDWebsocket):
 
             for api_trader in self.traders.values():
                 api_trader.updateStatus()
-                temp_trade_data=self.get_tradeFormat(api_trader, value, trade_signal, trade_type, "TRUE" if isRunner else "FALSE")
+                temp_trade_data = self.get_tradeFormat(api_trader, value, trade_signal, trade_type,
+                                                       "TRUE" if isRunner else "FALSE")
                 for trade_data in temp_trade_data:
                     api_trader.runTrader(trade_data)
 
@@ -352,7 +389,8 @@ class Main(Tasks, TDWebsocket):
 
             # UPDATE STATUS
             for mongo_trader in self.traders.values():
-                temp_trade_data = self.get_tradeFormat(mongo_trader, value, trade_signal, trade_type, "TRUE" if isRunner else "FALSE")
+                temp_trade_data = self.get_tradeFormat(mongo_trader, value, trade_signal, trade_type,
+                                                       "TRUE" if isRunner else "FALSE")
                 for trade_data in temp_trade_data:
                     self.tradier.runTrader(mongo_trader, trade_data)
 
@@ -374,12 +412,6 @@ class Main(Tasks, TDWebsocket):
 
             """  THIS RUNS THE TD INSTANCE  """
             self.setupTraders()
-
-            """  THIS WILL COMPILE THE ALERTS FROM DISCORD & GMAIL  """
-            trade_alerts = self.get_alerts(self.start_time)
-
-            """  THIS WILL PUT ALL ALERTS INTO C.OPTIONLIST TO BE TRADED  """
-            self.set_alerts(trade_alerts)
 
             """  CHECK THE TIME  """
             current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
@@ -406,16 +438,27 @@ class Main(Tasks, TDWebsocket):
                     print(message)
                     break
 
-            if current_time > TURN_OFF_TRADES:
+            elif current_time > TURN_OFF_TRADES:
                 print(f'It is {TURN_OFF_TRADES}, closing all queued trades')
                 c.OPTIONLIST.clear()
 
-            elif config.RUN_TA:
+            """  THIS WILL COMPILE THE ALERTS FROM DISCORD & GMAIL  """
+            trade_alerts = self.get_alerts(self.start_time)
 
-                """  ALL ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA  """
+            """  THIS WILL PUT ALL ALERTS INTO C.OPTIONLIST TO BE TRADED & DO AN INITIAL BUY SCAN """
+            self.set_alerts(trade_alerts)
+
+            """  CLEAN UP OUR OLD ORDERS  """
+            for order in c.DONTTRADELIST:
+                if order in c.OPTIONLIST:
+                    c.OPTIONLIST.remove(order)
+
+            if config.RUN_TA:
+
+                """  LEFT OVER ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA  """
                 for api_trader in self.traders.values():
 
-                    for value in c.OPTIONLIST:
+                    for value in tqdm(c.OPTIONLIST, desc="Scanning BUY signals..."):
 
                         df = techanalysis.get_TA(value, api_trader)
                         buy_signal = techanalysis.buy_criteria(df, value, api_trader)
@@ -431,18 +474,6 @@ class Main(Tasks, TDWebsocket):
                     self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
                     c.DONTTRADELIST.append(value)
 
-            """  CLEAN UP OUR OLD ORDERS  """
-            for order in c.DONTTRADELIST:
-                if order in c.OPTIONLIST:
-                    c.OPTIONLIST.remove(order)
-
-            """  CHECK ON ALL ORDER STATUSES  """
-            if RUN_TRADIER:
-                self.tradier.updateStatus()
-            else:
-                for api_trader in self.traders.values():
-                    api_trader.updateStatus()
-
             """  
             USE WEBSOCKET TO PRINT CURRENT PRICES - IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT  
             """
@@ -455,11 +486,26 @@ class Main(Tasks, TDWebsocket):
             if config.RUN_SELL_TA:
                 for api_trader in self.traders.values():
                     open_positions = mongo_helpers.get_mongo_openPositions(self)
-                    for open_position in open_positions:
+                    for open_position in tqdm(open_positions,desc="Scanning SELL signals..."):
                         df = techanalysis.get_TA(open_position, api_trader)
                         sell_signal = techanalysis.sell_criteria(df, open_position)
                         if sell_signal:
-                            mongo_helpers.close_mongo_position(self, open_position['_id'])
+                            if RUN_LIVE_TRADER:
+                                pass
+                                # if RUN_TRADIER:
+                                #     self.tradier.cancelALLorders()
+                                # open_positions = mongo_helpers.get_mongo_openPositions(self)
+                                # for open_position in open_positions:
+                                #     self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                            else:
+                                mongo_helpers.close_mongo_position(self, open_position['_id'])
+
+            """  CHECK ON ALL ORDER STATUSES  """
+            if RUN_TRADIER:
+                self.tradier.updateStatus()
+            else:
+                for api_trader in self.traders.values():
+                    api_trader.updateStatus()
 
             """  THIS KEEPS TRACK OF ANY TIME THE API GETS AN ERROR. 
             IF ERRORS ARE > 10, YOU MIGHT WANT TO CHECK OUT YOUR REQUESTS  """
@@ -488,7 +534,8 @@ class Main(Tasks, TDWebsocket):
                 if current_time < RUN_BACKTEST_TIME:
                     runBacktest = False
 
-                if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
+                if SHUTDOWN_TIME > current_time >= TURN_ON_TIME:
+                # if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
                     self.runTradingPlatform()
 
                 elif not runBacktest:
@@ -504,8 +551,9 @@ class Main(Tasks, TDWebsocket):
                             print(message)
 
                 else:
-                    print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME} - current_time: {current_time}')
-                    time.sleep(10*60)
+                    print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME} - '
+                          f'current_time: {current_time}')
+                    time.sleep(10 * 60)
 
             except Exception:
                 message = f"Just received an error: {traceback.format_exc()}"
