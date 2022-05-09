@@ -193,6 +193,7 @@ def get_TA(value, trader):
 
 def buy_criteria(df, value, trader):
     symbol = value['Symbol']
+    pre_symbol = value['Pre_Symbol']
 
     agg_group = df.groupby('agg')
 
@@ -280,7 +281,11 @@ def buy_criteria(df, value, trader):
 
     if value['Option_Type'].upper() == "CALL":
 
-        if (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and \
+        if (current_10m_bar['high'] > (current_adr['hl2'] or current_adr['hl1'])) and \
+                (current_10m_bar['close'] <= (current_adr['hl1'] or current_adr['hl2'])):
+            print(f'called for CALL for {pre_symbol} but in HIGH resistance zone')
+
+        elif (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and \
                 (twolast_5m_bar[pRsiMa] < twolast_5m_bar[pFastAtrRsiTL]) and \
                 (current_30m_bar[pRsiMa] > RSILOWNEUTRAL) and \
                 (last_5m_bar['hma_fast'] >= last_5m_bar['hma_slow']):
@@ -298,7 +303,11 @@ def buy_criteria(df, value, trader):
 
     elif value['Option_Type'].upper() == "PUT":
 
-        if (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and \
+        if (current_10m_bar['low'] < (current_adr['ll2'] or current_adr['ll1'])) and \
+                (current_10m_bar['close'] >= (current_adr['ll1'] or current_adr['ll2'])):
+            print(f'called for PUT for {pre_symbol} but in LOW resistance zone')
+
+        elif (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and \
                 (twolast_5m_bar[pRsiMa] > twolast_5m_bar[pFastAtrRsiTL]) and \
                 (current_30m_bar[pRsiMa] < RSIHIGHNEUTRAL) and \
                 (last_5m_bar['hma_fast'] <= last_5m_bar['hma_slow']):

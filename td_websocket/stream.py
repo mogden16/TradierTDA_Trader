@@ -2,6 +2,7 @@ from tda.auth import easy_client
 from tda.streaming import StreamClient
 
 from assets.helper_functions import selectSleep, modifiedAccountID
+from discord import discord_helpers
 
 import certifi
 import asyncio
@@ -101,13 +102,14 @@ class TDWebsocket:
                     self.mongo.open_positions.update_one({"Pre_Symbol": pre_symbol}, {"$set": {'Last_Price': last}}, upsert=False)
 
             except Exception as e:
-
+                # discord_helpers.send_discord_alert(f'issue with websocket \n {e}')
+                # print(f'issue with websocket \n {e}')
                 continue
 
     async def work(self):
         while self.isAlive:
             await stream_client.login()
-            await stream_client.quality_of_service(StreamClient.QOSLevel.EXPRESS)
+            await stream_client.quality_of_service(StreamClient.QOSLevel.FAST)
             self.initiate_open_positions()
 
             # Always add handlers before subscribing because many streams start sending
@@ -130,6 +132,7 @@ class TDWebsocket:
 
     def main(self):
 
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         loop = asyncio.new_event_loop()
         loop.create_task(self.monitor())
         while self.isAlive:

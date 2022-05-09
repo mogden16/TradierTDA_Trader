@@ -454,21 +454,45 @@ class Main(Tasks, TDWebsocket):
                     c.OPTIONLIST.remove(order)
 
             if config.RUN_TA:
+                if current_time[-4] == "0" or current_time[-4] == "5":
 
-                """  LEFT OVER ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA  """
-                for api_trader in self.traders.values():
-                    if len(c.OPTIONLIST) == 0:
-                        pass
-                    else:
-                        for value in tqdm(c.OPTIONLIST, desc="Scanning BUY signals..."):
+                    """  LEFT OVER ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA  """
+                    for api_trader in self.traders.values():
+                        if len(c.OPTIONLIST) == 0:
+                            pass
 
-                            df = techanalysis.get_TA(value, api_trader)
-                            buy_signal = techanalysis.buy_criteria(df, value, api_trader)
+                        else:
+                            for value in tqdm(c.OPTIONLIST, desc="Scanning BUY signals..."):
 
-                            """  IF BUY SIGNAL == TRUE THEN BUY!  """
-                            if buy_signal:
-                                self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
-                                c.DONTTRADELIST.append(value)
+                                df = techanalysis.get_TA(value, api_trader)
+                                buy_signal = techanalysis.buy_criteria(df, value, api_trader)
+
+                                """  IF BUY SIGNAL == TRUE THEN BUY!  """
+                                if buy_signal:
+                                    self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
+                                    c.DONTTRADELIST.append(value)
+
+                    """
+                    RUN SELL_TA CRITERIA
+                    """
+                    if config.RUN_SELL_TA:
+                        for api_trader in self.traders.values():
+                            open_positions = mongo_helpers.get_mongo_openPositions(self)
+                            if len(open_positions) == 0:
+                                pass
+                            else:
+                                for open_position in tqdm(open_positions, desc="Scanning SELL signals..."):
+                                    df = techanalysis.get_TA(open_position, api_trader)
+                                    sell_signal = techanalysis.sell_criteria(df, open_position)
+                                    if sell_signal:
+                                        if RUN_LIVE_TRADER:
+                                            if RUN_TRADIER:
+                                                self.tradier.cancel_order(open_position['Order_ID'])
+                                                self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                                            else:
+                                                print('no exit criteria for TD intraday technical analysis yet')
+                                        else:
+                                            mongo_helpers.close_mongo_position(self, open_position['_id'])
 
             else:
                 buy_signal = True
@@ -481,29 +505,6 @@ class Main(Tasks, TDWebsocket):
             """
             if RUN_WEBSOCKET:
                 streamprice.streamPrice(self)
-
-            """
-            RUN SELL_TA CRITERIA
-            """
-            if config.RUN_SELL_TA:
-                for api_trader in self.traders.values():
-                    open_positions = mongo_helpers.get_mongo_openPositions(self)
-                    if len(open_positions) == 0:
-                        pass
-                    else:
-                        for open_position in tqdm(open_positions,desc="Scanning SELL signals..."):
-                            df = techanalysis.get_TA(open_position, api_trader)
-                            sell_signal = techanalysis.sell_criteria(df, open_position)
-                            if sell_signal:
-                                if RUN_LIVE_TRADER:
-                                    pass
-                                    # if RUN_TRADIER:
-                                    #     self.tradier.cancelALLorders()
-                                    # open_positions = mongo_helpers.get_mongo_openPositions(self)
-                                    # for open_position in open_positions:
-                                    #     self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
-                                else:
-                                    mongo_helpers.close_mongo_position(self, open_position['_id'])
 
             """  CHECK ON ALL ORDER STATUSES  """
             if RUN_TRADIER:
@@ -530,41 +531,45 @@ class Main(Tasks, TDWebsocket):
 
         while True:
 
-            try:
+            current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
+            on_the_second = current_time[-2:]
+            if current_time[-2:] == '00':
 
-                current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
-                day = datetime.now(pytz.timezone(TIMEZONE)).strftime('%a')
-                weekends = ["Sat", "Sun"]
+                try:
 
-                if current_time < RUN_BACKTEST_TIME:
-                    runBacktest = False
+                    current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
+                    day = datetime.now(pytz.timezone(TIMEZONE)).strftime('%a')
+                    weekends = ["Sat", "Sun"]
 
-                if SHUTDOWN_TIME > current_time >= TURN_ON_TIME:
-                # if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
-                    self.runTradingPlatform()
+                    if current_time < RUN_BACKTEST_TIME:
+                        runBacktest = False
 
-                elif not runBacktest:
-                    if TEST_CLOSED_POSITIONS or TEST_ANALYSIS_POSITIONS:
-                        self.connectALL()
-                    study = backtest.run(self)
-                    if study:
-                        runBacktest = True
-                        disconnect = mongo_helpers.disconnect(self)
-                        if disconnect:
-                            message = f'Bot is shutting down, its currently: {current_time}'
-                            discord_helpers.send_discord_alert(message)
-                            print(message)
+                    if SHUTDOWN_TIME > current_time >= TURN_ON_TIME:
+                    # if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
+                        self.runTradingPlatform()
 
-                else:
-                    print(f'sleeping 10m intermitantly until {TURN_ON_TIME} or {RUN_BACKTEST_TIME} - '
-                          f'current_time: {current_time}')
-                    time.sleep(10 * 60)
+                    elif not runBacktest:
+                        if TEST_CLOSED_POSITIONS or TEST_ANALYSIS_POSITIONS:
+                            self.connectALL()
+                        study = backtest.run(self)
+                        if study:
+                            runBacktest = True
+                            disconnect = mongo_helpers.disconnect(self)
+                            if disconnect:
+                                message = f'Bot is shutting down, its currently: {current_time}'
+                                discord_helpers.send_discord_alert(message)
+                                print(message)
 
-            except Exception:
-                message = f"Just received an error: {traceback.format_exc()}"
-                discord_helpers.send_discord_alert(message)
-                print(message)
-                break
+                    else:
+                        print(f'sleeping 10m intermittently until {TURN_ON_TIME} or {RUN_BACKTEST_TIME} - '
+                              f'current_time: {current_time}')
+                        time.sleep(10*60)
+
+                except Exception:
+                    message = f"Just received an error: {traceback.format_exc()}"
+                    discord_helpers.send_discord_alert(message)
+                    print(message)
+                    break
 
 
 if __name__ == "__main__":
