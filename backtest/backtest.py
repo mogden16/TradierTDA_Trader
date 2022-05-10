@@ -329,42 +329,42 @@ def run(trader):
     if check == False:
         createFolder()
 
-    # existing_dfs = findexistingDFs(directory=path)
-    #
-    # for dataframe in existing_dfs:
-    #     EXISTINGDFLIST.append(dataframe)
-    #
-    # if not TEST_DISCORD and not TEST_ANALYSIS_POSITIONS and not TEST_CLOSED_POSITIONS:
-    #     print("You need to set one test group to 'True'")
-    #     return
-    #
-    # if TEST_DISCORD:
-    #     discord_alerts = discord_scanner.discord_messages(start_time, mins=60*24*LOOKBACK_DAYS)  # Convert to mins
-    #     if not discord_alerts:
-    #         return
-    #
-    #     for alert in discord_alerts:
-    #         BACKTESTLIST.append(alert)
-    #
-    # if TEST_ANALYSIS_POSITIONS:
-    #     analysis_alerts = find_analysis_positions(trader, start_time, LOOKBACK_DAYS)
-    #     if not analysis_alerts:
-    #         return
-    #
-    #     for alert in analysis_alerts:
-    #         BACKTESTLIST.append(alert)
-    #
-    # elif TEST_CLOSED_POSITIONS:
-    #     closed_alerts = find_closed_positions(trader, start_time, LOOKBACK_DAYS)
-    #     if not closed_alerts:
-    #         return
-    #
-    #     for alert in closed_alerts:
-    #         BACKTESTLIST.append(alert)
-    #
-    # grabDataframes()
-    #
-    # movexlsx(path)
+    existing_dfs = findexistingDFs(directory=path)
+
+    for dataframe in existing_dfs:
+        EXISTINGDFLIST.append(dataframe)
+
+    if not TEST_DISCORD and not TEST_ANALYSIS_POSITIONS and not TEST_CLOSED_POSITIONS:
+        print("You need to set one test group to 'True'")
+        return
+
+    if TEST_DISCORD:
+        discord_alerts = discord_scanner.discord_messages(start_time, mins=60*24*LOOKBACK_DAYS)  # Convert to mins
+        if not discord_alerts:
+            return
+
+        for alert in discord_alerts:
+            BACKTESTLIST.append(alert)
+
+    if TEST_ANALYSIS_POSITIONS:
+        analysis_alerts = find_analysis_positions(trader, start_time, LOOKBACK_DAYS)
+        if not analysis_alerts:
+            return
+
+        for alert in analysis_alerts:
+            BACKTESTLIST.append(alert)
+
+    elif TEST_CLOSED_POSITIONS:
+        closed_alerts = find_closed_positions(trader, start_time, LOOKBACK_DAYS)
+        if not closed_alerts:
+            return
+
+        for alert in closed_alerts:
+            BACKTESTLIST.append(alert)
+
+    grabDataframes()
+
+    movexlsx(path)
 
     evaluateTakeProfit(path)
 

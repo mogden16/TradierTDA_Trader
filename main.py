@@ -532,7 +532,6 @@ class Main(Tasks, TDWebsocket):
         while True:
 
             current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
-            on_the_second = current_time[-2:]
             if current_time[-2:] == '00':
 
                 try:
