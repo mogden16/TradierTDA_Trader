@@ -195,6 +195,16 @@ class Main(Tasks, TDWebsocket):
 
         return trade_alerts
 
+    def OPTIONLIST_find_one(self, alert):
+        pre_symbol = alert['Pre_Symbol']
+
+        position = next((x for x in c.OPTIONLIST if x["Pre_Symbol"] == pre_symbol), None)
+
+        if position is None:
+            return False
+        else:
+            return True
+
     def set_alerts(self, alerts):
 
         for alert in alerts:
@@ -262,7 +272,11 @@ class Main(Tasks, TDWebsocket):
                                             self.set_trader(alert, trade_signal="BUY", trade_type="LIMIT")
                                             c.DONTTRADELIST.append(alert)
                                         else:
-                                            c.OPTIONLIST.append(alert)
+                                            position = self.OPTIONLIST_find_one(alert)
+                                            if position == True:
+                                                c.DONTTRADELIST(alert)
+                                            else:
+                                                c.OPTIONLIST.append(alert)
 
                                 else:
                                     buy_signal = True
@@ -284,24 +298,21 @@ class Main(Tasks, TDWebsocket):
                 if alert['HedgeAlert'] == "TRUE":
 
                     print(f'Not trading {alert["Pre_Symbol"]}   hedge is True')
-
                     alert['Open_Interest'] = oi
                     alert['Volume'] = volume
                     alert['Entry_Price'] = bid
-
                     print(f'testing: would have sent to mongo Analysis')
 
                 else:
 
                     print(f'testing: would have sent to mongo Analysis')
-
                     c.OPTIONLIST.append(alert)
 
     @exception_handler
     def get_tradeFormat(self, live_trader, value, signal_type, trade_type, isRunner):
         trade_data = []
 
-        if signal_type == None:
+        if signal_type is None:
             return trade_data
 
         position = live_trader.open_positions.find_one(
