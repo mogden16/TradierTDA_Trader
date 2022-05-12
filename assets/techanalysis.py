@@ -276,6 +276,8 @@ def buy_criteria(df, value, trader):
     twolast_5m_bar = df_5m.iloc[-3]
     last_5m_bar = df_5m.iloc[-2]
     current_10m_bar = df_10m.iloc[-1]
+    last_10m_bar = df_10m.iloc[-2]
+    twolast_10m_bar = df_10m.iloc[-3]
     current_30m_bar = df_30m.iloc[-1]
     current_adr = adr.iloc[-1]
 
@@ -288,8 +290,8 @@ def buy_criteria(df, value, trader):
         elif (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and \
                 (twolast_5m_bar[pRsiMa] < twolast_5m_bar[pFastAtrRsiTL]) and \
                 (current_30m_bar[pRsiMa] > RSILOWNEUTRAL) and \
-                (last_5m_bar['hma_fast'] >= last_5m_bar['hma_slow']):
-            message = f"Buying CALL because QQE Cross UP & Current 30m QQE is above 45"
+                (last_10m_bar['hma_fast'] >= last_10m_bar['hma_slow']):
+            message = f"Buying CALL for {pre_symbol} because QQE Cross UP & Current 30m QQE is above 45"
             discord_helpers.send_discord_alert(message)
             print(message)
             return True
@@ -310,8 +312,8 @@ def buy_criteria(df, value, trader):
         elif (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and \
                 (twolast_5m_bar[pRsiMa] > twolast_5m_bar[pFastAtrRsiTL]) and \
                 (current_30m_bar[pRsiMa] < RSIHIGHNEUTRAL) and \
-                (last_5m_bar['hma_fast'] <= last_5m_bar['hma_slow']):
-            message = f"Buying PUT because QQE Cross DOWN & Current 30m QQE is below 55"
+                (last_10m_bar['hma_fast'] <= last_10m_bar['hma_slow']):
+            message = f"Buying PUT for {pre_symbol} because QQE Cross DOWN & Current 30m QQE is below 55"
             discord_helpers.send_discord_alert(message)
             print(message)
             return True

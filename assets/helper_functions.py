@@ -1,7 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import pytz
 import config
+import pandas_market_calendars as mcal
+import math
 
 
 THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -11,6 +13,8 @@ TURN_ON_TIME = config.TURN_ON_TIME
 SELL_ALL_POSITIONS = config.SELL_ALL_POSITIONS
 TURN_OFF_TRADES = config.TURN_OFF_TRADES
 SHUTDOWN_TIME = config.SHUTDOWN_TIME
+MIN_DTE = config.MIN_DTE
+
 
 def getDatetime():
     """ function obtains the datetime based on timezone using the pytz library.
@@ -137,3 +141,36 @@ def addNewStrategy(trader, strategy, asset_type):
     # IF STRATEGY NOT IN STRATEGIES COLLECTION IN MONGO, THEN ADD IT
 
     trader.mongo.strategies.update_one({"Strategy": strategy}, {"$set": obj}, upsert=True)
+
+
+def find_option_expDate(trader, symbol):
+
+    test_option_type = "CALL"
+    nyse = mcal.get_calendar('NYSE')
+    cal = nyse.valid_days(start_date=datetime.now(), end_date=datetime.now() + timedelta(days=MIN_DTE + 14))
+
+    resp = trader.tdameritrade.getQuote(symbol)
+    test_price = float(resp[symbol]["lastPrice"])
+    test_strike_price = int(math.floor(test_price))
+
+    option_exp_date = datetime.now() + timedelta(days=MIN_DTE)
+    option_exp_date = option_exp_date.strftime('%Y-%m-%d')
+    url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={symbol}&contractType={test_option_type}&includeQuotes=FALSE&strike={test_strike_price}&fromDate={option_exp_date}&toDate={option_exp_date}"
+    resp = trader.tdameritrade.sendRequest(url)
+
+    new_dte = MIN_DTE
+    while resp['status'] == 'FAILED':
+        option_exp_date = cal[new_dte].strftime('%Y-%m-%d')
+        for i in range(5):
+            url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={symbol}&contractType={test_option_type}&includeQuotes=FALSE&strike={test_strike_price}&fromDate={option_exp_date}&toDate={option_exp_date}"
+            resp = trader.tdameritrade.sendRequest(url)
+
+            if resp['status'] != 'FAILED':
+                option_exp_date = cal[new_dte].strftime('%Y-%m-%d')
+                break
+
+            else:
+                test_strike_price += 1
+        new_dte += 1
+
+    return option_exp_date

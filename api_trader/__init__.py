@@ -142,7 +142,7 @@ class ApiTrader(OrderBuilder):
                 order, obj = self.standardOrder(
                     trade_data, strategy_object, direction)
 
-        if order == None and obj == None:
+        if order is None and obj is None:
 
             return
 

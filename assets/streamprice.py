@@ -240,19 +240,19 @@ def streamPrice(trader):
                         if current_price > entry_price:
                             print(
                                 f'{pre_symbol}   TargetPrice {target_price}   currentPrice {current_price}   '
-                                f'entryPrice {entry_price}   stoplossPrice{stoploss_price}')
+                                f'entryPrice {entry_price}   stoplossPrice {stoploss_price}')
                         else:
                             print(
                                 f'{pre_symbol}   TargetPrice {target_price}   entryPrice {entry_price}   '
-                                f'currentPrice {current_price}   stoplossPrice{stoploss_price}')
+                                f'currentPrice {current_price}   stoplossPrice {stoploss_price}')
             if current_price > entry_price:
                 print(
                     f'{pre_symbol}   TargetPrice {takeprofit_price}   currentPrice {current_price}   '
-                    f'entryPrice {entry_price}   stoplossPrice{stoploss_price}')
+                    f'entryPrice {entry_price}   stoplossPrice {stoploss_price}')
             else:
                 print(
                     f'{pre_symbol}   TargetPrice {takeprofit_price}   entryPrice {entry_price}   '
-                    f'currentPrice {current_price}   stoplossPrice{stoploss_price}')
+                    f'currentPrice {current_price}   stoplossPrice {stoploss_price}')
 
 
             #

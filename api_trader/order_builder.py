@@ -164,7 +164,7 @@ class OrderBuilder:
                                f'price setting on config.py')
                     print(message)
                     discord_helpers.send_discord_alert(message)
-                    return
+                    return None, None
 
             except Exception:
 

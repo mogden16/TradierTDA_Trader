@@ -3,6 +3,7 @@ import time
 import logging
 import os
 import traceback
+import math
 
 import config
 from datetime import datetime
@@ -18,6 +19,7 @@ from mongo import MongoDB, mongo_helpers
 from tradier import TradierTrader
 from threading import Thread
 from tqdm import tqdm
+from open_cv import AlertScanner, run_opencv
 
 from assets import pushsafer, helper_functions, techanalysis, streamprice
 from assets.exception_handler import exception_handler
@@ -44,6 +46,10 @@ RUN_TASKS = config.RUN_TASKS
 RUN_BACKTEST_TIME = config.RUN_BACKTEST_TIME
 TEST_CLOSED_POSITIONS = config.TEST_CLOSED_POSITIONS
 TEST_ANALYSIS_POSITIONS = config.TEST_ANALYSIS_POSITIONS
+RUN_OPENCV = config.RUN_OPENCV
+ITM_OR_OTM = config.ITM_OR_OTM.upper()
+OPTION_PRICE_INCREMENT = config.OPTION_PRICE_INCREMENT
+TRADE_SYMBOL = config.TRADE_SYMBOL.upper()
 
 
 class Main(Tasks, TDWebsocket):
@@ -310,6 +316,7 @@ class Main(Tasks, TDWebsocket):
 
     @exception_handler
     def get_tradeFormat(self, live_trader, value, signal_type, trade_type, isRunner):
+
         trade_data = []
 
         if signal_type is None:
@@ -318,68 +325,154 @@ class Main(Tasks, TDWebsocket):
         position = live_trader.open_positions.find_one(
             {"Trader": live_trader.user["Name"], "Symbol": value['Symbol'], "Strategy": value['Strategy']})
 
-        if signal_type == "CLOSE" and position is not None:
+        if value['Strategy'] != "OpenCV":
 
-            obj = {
-                "Symbol": value['Symbol'],
-                "Side": "SELL_TO_CLOSE",
-                "Pre_Symbol": value['Pre_Symbol'],
-                "Exp_Date": value['Exp_Date'],
-                "Strike_Price": value['Strike_Price'],
-                "Option_Type": value['Option_Type'],
-                "Strategy": "STANDARD",
-                "Asset_Type": "OPTION",
-                "Trade_Type": trade_type,
-                "isRunner": isRunner
-            }
-            trade_data.append(obj)
+            if signal_type == "CLOSE" and position is not None:
 
-        elif signal_type == "BUY":
-            if not IS_TESTING:
-                url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={value['Symbol']}&" \
-                      f"contractType={value['Option_Type']}&" \
-                      f"includeQuotes=FALSE&" \
-                      f"strike={value['Strike_Price']}&" \
-                      f"fromDate={value['Exp_Date']}&" \
-                      f"toDate={value['Exp_Date']}"
+                obj = {
+                    "Symbol": value['Symbol'],
+                    "Side": "SELL_TO_CLOSE",
+                    "Pre_Symbol": value['Pre_Symbol'],
+                    "Exp_Date": value['Exp_Date'],
+                    "Strike_Price": value['Strike_Price'],
+                    "Option_Type": value['Option_Type'],
+                    "Strategy": "STANDARD",
+                    "Asset_Type": "OPTION",
+                    "Trade_Type": trade_type,
+                    "isRunner": isRunner
+                }
+                trade_data.append(obj)
+
+            elif signal_type == "BUY":
+                if not IS_TESTING:
+                    url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={value['Symbol']}&" \
+                          f"contractType={value['Option_Type']}&" \
+                          f"includeQuotes=FALSE&" \
+                          f"strike={value['Strike_Price']}&" \
+                          f"fromDate={value['Exp_Date']}&" \
+                          f"toDate={value['Exp_Date']}"
+                    resp = live_trader.tdameritrade.sendRequest(url)
+                    expdatemapkey = value['Option_Type'].lower() + "ExpDateMap"
+                    if list(resp.keys())[0] == "error" or list(resp.values())[1] == "FAILED":
+                        print(f"Received an error for {value['Symbol']}")
+                        self.error += 1
+                        return
+                    else:
+                        for dt in resp[expdatemapkey]:
+                            for strikePrice in resp[expdatemapkey][dt]:
+                                last = resp[expdatemapkey][dt][strikePrice][0]["last"]
+                                volume = resp[expdatemapkey][dt][strikePrice][0]["totalVolume"]
+                                delta = resp[expdatemapkey][dt][strikePrice][0]["delta"]
+                                oi = resp[expdatemapkey][dt][strikePrice][0]["openInterest"]
+
+                obj = {
+                    "Symbol": value['Symbol'],
+                    "Side": "BUY_TO_OPEN",
+                    "Pre_Symbol": value['Pre_Symbol'],
+                    "Exp_Date": value['Exp_Date'],
+                    "Strike_Price": value['Strike_Price'],
+                    "Option_Type": value['Option_Type'],
+                    "Strategy": value['Strategy'],
+                    "Asset_Type": "OPTION",
+                    "Trade_Type": trade_type,
+                    "isRunner": isRunner
+                }
+
+                if not IS_TESTING:
+                    obj['Volume'] = volume
+                    obj['Open_Interest'] = oi
+                    obj['Entry_Price'] = last
+                    obj['Delta'] = delta
+
+                trade_data.append(obj)
+
+        else:
+
+            if signal_type == "CLOSE":
+                if position is not None:
+                    obj = {
+                        "Symbol": position['Symbol'],
+                        "Side": "SELL_TO_CLOSE",
+                        "Pre_Symbol": position["Pre_Symbol"],
+                        "Exp_Date": position['Exp_Date'],
+                        "Option_Type": position["Option_Type"],
+                        "Strategy": "OpenCV",
+                        "Asset_Type": "OPTION",
+                        "Trade_Type": trade_type,
+                        "isRunner": isRunner
+                    }
+                    trade_data.append(obj)
+
+            else:
+                option_type = "CALL" if signal_type == "BUY" else "PUT"
+
+                resp = live_trader.tdameritrade.getQuote(TRADE_SYMBOL)
+                price = float(resp[TRADE_SYMBOL]["lastPrice"])
+
+                option_exp_date = helper_functions.find_option_expDate(live_trader, TRADE_SYMBOL)
+
+                if ITM_OR_OTM == "OTM":
+                    if option_type == "CALL":
+                        strike_price = int(math.floor(price) + OPTION_PRICE_INCREMENT)
+                    else:
+                        strike_price = int(math.ceil(price) - OPTION_PRICE_INCREMENT)
+
+                elif ITM_OR_OTM == "ITM":
+                    if option_type == "CALL":
+                        strike_price = int(math.ceil(price) - OPTION_PRICE_INCREMENT)
+                    else:
+                        strike_price = int(math.floor(price) + OPTION_PRICE_INCREMENT)
+
+                url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={TRADE_SYMBOL}&contractType={option_type}&includeQuotes=FALSE&strike={strike_price}&fromDate={option_exp_date}&toDate={option_exp_date}"
                 resp = live_trader.tdameritrade.sendRequest(url)
-                expdatemapkey = value['Option_Type'].lower() + "ExpDateMap"
-                if list(resp.keys())[0] == "error" or list(resp.values())[1] == "FAILED":
-                    print(f"Received an error for {value['Symbol']}")
-                    self.error += 1
-                    return
-                else:
-                    for dt in resp[expdatemapkey]:
-                        for strikePrice in resp[expdatemapkey][dt]:
-                            last = resp[expdatemapkey][dt][strikePrice][0]["last"]
-                            volume = resp[expdatemapkey][dt][strikePrice][0]["totalVolume"]
-                            delta = resp[expdatemapkey][dt][strikePrice][0]["delta"]
-                            oi = resp[expdatemapkey][dt][strikePrice][0]["openInterest"]
 
-            obj = {
-                "Symbol": value['Symbol'],
-                "Side": "BUY_TO_OPEN",
-                "Pre_Symbol": value['Pre_Symbol'],
-                "Exp_Date": value['Exp_Date'],
-                "Strike_Price": value['Strike_Price'],
-                "Option_Type": value['Option_Type'],
-                "Strategy": value['Strategy'],
-                "Asset_Type": "OPTION",
-                "Trade_Type": trade_type,
-                "isRunner": isRunner
-            }
+                option_symbol = None
+                expdatemapkey = option_type.lower() + "ExpDateMap"
+                # print('len',len(resp[expdatemapkey]))
+                # print('resp', resp[expdatemapkey])
+                while len(resp[expdatemapkey]) == 0:
+                    if ITM_OR_OTM == "OTM":
+                        if option_type == "CALL":
+                            strike_price += 1
+                        else:
+                            strike_price -= 1
 
-            if not IS_TESTING:
-                obj['Volume'] = volume
-                obj['Open_Interest'] = oi
-                obj['Entry_Price'] = last
-                obj['Delta'] = delta
+                    elif ITM_OR_OTM == "ITM":
+                        if option_type == "CALL":
+                            strike_price -= 1
+                        else:
+                            strike_price += 1
 
-            trade_data.append(obj)
+                    url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={TRADE_SYMBOL}&contractType={option_type}&includeQuotes=FALSE&strike={strike_price}&fromDate={option_exp_date}&toDate={option_exp_date}"
+                    resp = live_trader.tdameritrade.sendRequest(url)
+                    # print('updated len', len(resp[expdatemapkey]))
+                    # print('updated resp', resp[expdatemapkey])
+
+                for dt in resp[expdatemapkey]:
+                    for strikePrice in resp[expdatemapkey][dt]:
+                        option_symbol = resp[expdatemapkey][dt][strikePrice][0]["symbol"]
+                        mark = resp[expdatemapkey][dt][strikePrice][0]["mark"]
+                        volume = resp[expdatemapkey][dt][strikePrice][0]["totalVolume"]
+                        delta = resp[expdatemapkey][dt][strikePrice][0]["delta"]
+                        print(option_symbol + " --> mark=" + str(mark) + " delta=" + str(delta) + " volume=" + str(
+                            volume))
+
+                obj = {
+                    "Symbol": TRADE_SYMBOL,
+                    "Side": "BUY_TO_OPEN",
+                    "Pre_Symbol": option_symbol,
+                    "Exp_Date": option_exp_date,
+                    "Option_Type": option_type,
+                    "Strategy": "OpenCV",
+                    "Asset_Type": "OPTION",
+                    "Trade_Type": trade_type,
+                    "isRunner": isRunner
+                }
+                trade_data.append(obj)
 
         return trade_data
 
-    @exception_handler
+    # @exception_handler
     def set_trader(self, value, trade_signal, trade_type="LIMIT", **kwargs):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
         """
@@ -417,7 +510,10 @@ class Main(Tasks, TDWebsocket):
 
         connected = self.connectALL()
 
+        alertScanner = AlertScanner.AlertScanner()
+
         SHUT_DOWN = False
+        current_trend = None
 
         while connected:
 
@@ -464,7 +560,7 @@ class Main(Tasks, TDWebsocket):
                 if order in c.OPTIONLIST:
                     c.OPTIONLIST.remove(order)
 
-            if config.RUN_TA:
+            if config.RUN_TA and (RUN_GMAIL or RUN_DISCORD):
                 if current_time[-4] == "0" or current_time[-4] == "5":
 
                     """  LEFT OVER ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA  """
@@ -510,6 +606,34 @@ class Main(Tasks, TDWebsocket):
                 for value in c.OPTIONLIST:
                     self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
                     c.DONTTRADELIST.append(value)
+
+            """" RUN OPENCV FOR SPY ONLY """
+            if RUN_OPENCV:
+                switcher = {
+                    "BUY": 1,
+                    "SELL": -1,
+                    "CLOSE": 0,
+                    "Not Available": 99999
+                }
+
+                trade_signal = alertScanner.scanVisualAlerts()
+                print(f'current_trend: {trade_signal}')
+                new_trend = switcher.get(trade_signal)
+
+                if trade_signal is not None and new_trend != current_trend:
+                    message = f'TradingBOT just saw a possible trade: {trade_signal}'
+                    discord_helpers.send_discord_alert(message)
+                    print(message)
+
+                    signal = run_opencv.run(new_trend)
+
+                    if signal:
+                        value = {
+                            "Symbol": TRADE_SYMBOL,
+                            "Strategy": "OpenCV"
+                        }
+                        self.set_trader(value, trade_signal=trade_signal, trade_type="LIMIT")
+                        current_trend = new_trend
 
             """  
             USE WEBSOCKET TO PRINT CURRENT PRICES - IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT  
@@ -588,7 +712,6 @@ if __name__ == "__main__":
     """
 
     main = Main()
-
     main.run()
 
     """ IF YOU JUST WANT TO RUN BACKTEST, 
