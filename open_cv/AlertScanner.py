@@ -1,7 +1,6 @@
 import mss
 import cv2
 import numpy
-import math
 import time
 import os
 import logging
@@ -14,8 +13,6 @@ from assets.timeformatter import Formatter
 from assets.multifilehandler import MultiFileHandler
 
 THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
-
-assets = os.path.join(THIS_FOLDER, 'assets')
 
 path = Path(THIS_FOLDER)
 
@@ -74,10 +71,10 @@ class AlertScanner:
             'height': self.chart_height
         }
 
-        longArrowImg = cv2.imread('img/Long_Arrow.png')
-        shortArrowImg = cv2.imread('img/Short_Arrow.png')
-        exitDownArrowImg = cv2.imread('img/Close_Down_Arrow.png')
-        exitUpArrowImg = cv2.imread('img/Close_Up_Arrow.png')
+        longArrowImg = cv2.imread('./img/Long_Arrow.png')
+        shortArrowImg = cv2.imread('./img/Short_Arrow.png')
+        exitDownArrowImg = cv2.imread('./img/Close_Down_Arrow.png')
+        exitUpArrowImg = cv2.imread('./img/Close_Up_Arrow.png')
         w = longArrowImg.shape[1]
         h = longArrowImg.shape[0]
 

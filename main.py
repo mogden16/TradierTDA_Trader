@@ -395,6 +395,7 @@ class Main(Tasks, TDWebsocket):
                         "Side": "SELL_TO_CLOSE",
                         "Pre_Symbol": position["Pre_Symbol"],
                         "Exp_Date": position['Exp_Date'],
+                        "Strike_Price": position['Strike_Price'],
                         "Option_Type": position["Option_Type"],
                         "Strategy": "OpenCV",
                         "Asset_Type": "OPTION",
@@ -406,55 +407,17 @@ class Main(Tasks, TDWebsocket):
             else:
                 option_type = "CALL" if signal_type == "BUY" else "PUT"
 
-                resp = live_trader.tdameritrade.getQuote(TRADE_SYMBOL)
-                price = float(resp[TRADE_SYMBOL]["lastPrice"])
-
                 option_exp_date = helper_functions.find_option_expDate(live_trader, TRADE_SYMBOL)
-
-                if ITM_OR_OTM == "OTM":
-                    if option_type == "CALL":
-                        strike_price = int(math.floor(price) + OPTION_PRICE_INCREMENT)
-                    else:
-                        strike_price = int(math.ceil(price) - OPTION_PRICE_INCREMENT)
-
-                elif ITM_OR_OTM == "ITM":
-                    if option_type == "CALL":
-                        strike_price = int(math.ceil(price) - OPTION_PRICE_INCREMENT)
-                    else:
-                        strike_price = int(math.floor(price) + OPTION_PRICE_INCREMENT)
-
-                url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={TRADE_SYMBOL}&contractType={option_type}&includeQuotes=FALSE&strike={strike_price}&fromDate={option_exp_date}&toDate={option_exp_date}"
-                resp = live_trader.tdameritrade.sendRequest(url)
-
-                option_symbol = None
+                resp = run_opencv.get_optioncontract(live_trader, TRADE_SYMBOL, option_exp_date, option_type)
                 expdatemapkey = option_type.lower() + "ExpDateMap"
-                # print('len',len(resp[expdatemapkey]))
-                # print('resp', resp[expdatemapkey])
-                while len(resp[expdatemapkey]) == 0:
-                    if ITM_OR_OTM == "OTM":
-                        if option_type == "CALL":
-                            strike_price += 1
-                        else:
-                            strike_price -= 1
-
-                    elif ITM_OR_OTM == "ITM":
-                        if option_type == "CALL":
-                            strike_price -= 1
-                        else:
-                            strike_price += 1
-
-                    url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={TRADE_SYMBOL}&contractType={option_type}&includeQuotes=FALSE&strike={strike_price}&fromDate={option_exp_date}&toDate={option_exp_date}"
-                    resp = live_trader.tdameritrade.sendRequest(url)
-                    # print('updated len', len(resp[expdatemapkey]))
-                    # print('updated resp', resp[expdatemapkey])
 
                 for dt in resp[expdatemapkey]:
                     for strikePrice in resp[expdatemapkey][dt]:
                         option_symbol = resp[expdatemapkey][dt][strikePrice][0]["symbol"]
-                        mark = resp[expdatemapkey][dt][strikePrice][0]["mark"]
+                        last = resp[expdatemapkey][dt][strikePrice][0]["last"]
                         volume = resp[expdatemapkey][dt][strikePrice][0]["totalVolume"]
                         delta = resp[expdatemapkey][dt][strikePrice][0]["delta"]
-                        print(option_symbol + " --> mark=" + str(mark) + " delta=" + str(delta) + " volume=" + str(
+                        print(option_symbol + " --> mark=" + str(last) + " delta=" + str(delta) + " volume=" + str(
                             volume))
 
                 obj = {
@@ -462,6 +425,7 @@ class Main(Tasks, TDWebsocket):
                     "Side": "BUY_TO_OPEN",
                     "Pre_Symbol": option_symbol,
                     "Exp_Date": option_exp_date,
+                    "Strike_Price": strikePrice,
                     "Option_Type": option_type,
                     "Strategy": "OpenCV",
                     "Asset_Type": "OPTION",
@@ -678,8 +642,7 @@ class Main(Tasks, TDWebsocket):
                     if current_time < RUN_BACKTEST_TIME:
                         runBacktest = False
 
-                    if SHUTDOWN_TIME > current_time >= TURN_ON_TIME:
-                    # if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
+                    if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
                         self.runTradingPlatform()
 
                     elif not runBacktest:
