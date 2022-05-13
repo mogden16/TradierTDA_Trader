@@ -19,7 +19,7 @@ path = Path(THIS_FOLDER)
 
 class AlertScanner:
     def __init__(self):
-        self.initiation = True
+        self.initiation = False
         self.prev_direction = 99999
         self.prev_systemStatus = "RUNNING"
         self.runId = time.strftime("%Y_%m_%d_%H_%M_%S")
@@ -152,7 +152,6 @@ class AlertScanner:
             elif direction == 99999:
                 direction = 0
 
-
         if direction == 1:
             max_loc = longArrow
         elif direction == -1:
@@ -160,19 +159,17 @@ class AlertScanner:
         elif direction == 0:
             max_loc = exitArrow
         else:
-            max_loc = (0,0)
+            max_loc = (0, 0)
 
-        systemStatus = "RUNNING"
-        #if direction == 99999:
-        #    systemStatus = "ERROR"
+        if direction == 99999:
+            systemStatus = "ERROR"
+        else:
+            systemStatus = "RUNNING"
 
         if self.initiation and systemStatus == "RUNNING":
-            self.prev_direction = direction
             sendAlert = True
-        elif systemStatus == "ERROR":
-            sendAlert = False
         else:
-            sendAlert = True
+            sendAlert = False
 
         scr = scr.copy()
         for (x, y) in zip(allLongArrows[1], allLongArrows[0]):
@@ -196,16 +193,13 @@ class AlertScanner:
 
         cv2.imshow('Screen Shot', scr)
 
-        if sendAlert or systemStatus == "ERROR" or self.initiation:
+        if sendAlert and self.initiation:
             print(f"\n{current_time} --> Status : {systemStatus}, prev_direction={switcher.get(self.prev_direction)}, direction={switcher.get(direction)},  sendAlert= {sendAlert}")
-            if systemStatus == "RUNNING":
-                if sendAlert:
-                    trade_signal = switcher.get(direction)
+            trade_signal = switcher.get(direction)
 
-        if systemStatus == "ERROR":
-            self.initiation = True
         else:
-            self.initiation = False
+            self.initiation = True
+
         self.prev_direction = direction
         self.prev_systemStatus = systemStatus
         cv2.waitKey(1)

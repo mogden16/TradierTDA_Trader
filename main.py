@@ -202,9 +202,9 @@ class Main(Tasks, TDWebsocket):
         return trade_alerts
 
     def OPTIONLIST_find_one(self, alert):
-        pre_symbol = alert['Pre_Symbol']
+        symbol = alert['Symbol']
 
-        position = next((x for x in c.OPTIONLIST if x["Pre_Symbol"] == pre_symbol), None)
+        position = next((x for x in c.OPTIONLIST if x["Symbol"] == symbol), None)
 
         if position is None:
             return False
@@ -475,7 +475,7 @@ class Main(Tasks, TDWebsocket):
         connected = self.connectALL()
 
         alertScanner = AlertScanner.AlertScanner()
-
+        initiation = False
         SHUT_DOWN = False
         current_trend = None
 
@@ -571,7 +571,9 @@ class Main(Tasks, TDWebsocket):
                     self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
                     c.DONTTRADELIST.append(value)
 
-            """" RUN OPENCV FOR SPY ONLY """
+            """" 
+            RUN OPENCV FOR config.TRADE_SYMBOL ONLY 
+            """
             if RUN_OPENCV:
                 switcher = {
                     "BUY": 1,
@@ -583,13 +585,16 @@ class Main(Tasks, TDWebsocket):
                 trade_signal = alertScanner.scanVisualAlerts()
                 print(f'current_trend: {trade_signal}')
                 new_trend = switcher.get(trade_signal)
+                if initiation is False:
+                    current_trend = new_trend
+                    initiation = True
 
                 if trade_signal is not None and new_trend != current_trend:
                     message = f'TradingBOT just saw a possible trade: {trade_signal}'
                     discord_helpers.send_discord_alert(message)
                     print(message)
 
-                    signal = run_opencv.run(new_trend)
+                    signal = run_opencv.run(alertScanner, new_trend)
 
                     if signal:
                         value = {

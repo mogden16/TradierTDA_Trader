@@ -11,15 +11,13 @@ ITM_OR_OTM = config.ITM_OR_OTM
 OPTION_PRICE_INCREMENT = config.OPTION_PRICE_INCREMENT
 
 
-def run(current_trend):
+def run(alertScanner, current_trend):
     switcher = {
         "BUY": 1,
         "SELL": -1,
         "CLOSE": 0,
         "Not Available": 99999
     }
-
-    alertScanner = AlertScanner.AlertScanner()
 
     for i in range(1, SCAN_TIMES+1):
         print(f'scan#: {i}/{SCAN_TIMES}')
