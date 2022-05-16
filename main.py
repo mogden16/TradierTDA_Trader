@@ -397,7 +397,7 @@ class Main(Tasks, TDWebsocket):
                         "Exp_Date": position['Exp_Date'],
                         "Strike_Price": position['Strike_Price'],
                         "Option_Type": position["Option_Type"],
-                        "Strategy": "OpenCV",
+                        "Strategy": "STANDARD",
                         "Asset_Type": "OPTION",
                         "Trade_Type": trade_type,
                         "isRunner": isRunner
@@ -436,7 +436,7 @@ class Main(Tasks, TDWebsocket):
 
         return trade_data
 
-    # @exception_handler
+    @exception_handler
     def set_trader(self, value, trade_signal, trade_type="LIMIT", **kwargs):
         """ METHOD RUNS THE TWO METHODS ABOVE AND THEN RUNS LIVE TRADER METHOD RUNTRADER FOR EACH INSTANCE.
         """
@@ -496,6 +496,7 @@ class Main(Tasks, TDWebsocket):
                     open_positions = mongo_helpers.get_mongo_openPositions(self)
                     for open_position in open_positions:
                         self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
+                    SHUT_DOWN = True
 
             """  ONCE MARKET IS CLOSED CLOSED, CLOSE ALL CONNECTIONS TO MONGO  """
             if current_time >= SHUTDOWN_TIME:
@@ -525,6 +526,7 @@ class Main(Tasks, TDWebsocket):
                     c.OPTIONLIST.remove(order)
 
             if config.RUN_TA and (RUN_GMAIL or RUN_DISCORD):
+                """ SCAN EVERY 5m - ("XX:00:XX" or "XX:05:XX) """
                 if current_time[-4] == "0" or current_time[-4] == "5":
 
                     """  LEFT OVER ALERTS HAVE TO BE SCANNED UNTIL THEY MEET THE TA CRITERIA  """
@@ -534,7 +536,8 @@ class Main(Tasks, TDWebsocket):
 
                         else:
                             for value in tqdm(c.OPTIONLIST, desc="Scanning BUY signals..."):
-
+                                if value['Strategy'] == "OpenCV":
+                                    continue
                                 df = techanalysis.get_TA(value, api_trader)
                                 buy_signal = techanalysis.buy_criteria(df, value, api_trader)
 
@@ -553,6 +556,8 @@ class Main(Tasks, TDWebsocket):
                                 pass
                             else:
                                 for open_position in tqdm(open_positions, desc="Scanning SELL signals..."):
+                                    if value['Strategy'] == "OpenCV":
+                                        continue
                                     df = techanalysis.get_TA(open_position, api_trader)
                                     sell_signal = techanalysis.sell_criteria(df, open_position)
                                     if sell_signal:
@@ -574,10 +579,10 @@ class Main(Tasks, TDWebsocket):
             """" 
             RUN OPENCV FOR config.TRADE_SYMBOL ONLY 
             """
-            if RUN_OPENCV:
+            if RUN_OPENCV and not SHUT_DOWN:
                 switcher = {
-                    "BUY": 1,
-                    "SELL": -1,
+                    "BUY": "CALL",
+                    "SELL": "PUT",
                     "CLOSE": 0,
                     "Not Available": 99999
                 }
@@ -594,15 +599,19 @@ class Main(Tasks, TDWebsocket):
                     discord_helpers.send_discord_alert(message)
                     print(message)
 
-                    signal = run_opencv.run(alertScanner, new_trend)
-
-                    if signal:
+                    tos_signal = run_opencv.run(alertScanner, new_trend)
+                    if tos_signal:
                         value = {
                             "Symbol": TRADE_SYMBOL,
-                            "Strategy": "OpenCV"
+                            "Strategy": "OpenCV",
+                            "Option_Type": trade_signal
                         }
-                        self.set_trader(value, trade_signal=trade_signal, trade_type="LIMIT")
-                        current_trend = new_trend
+                        for api_trader in self.traders.values():
+                            df = techanalysis.get_TA(value, api_trader)
+                            signal = techanalysis.openCV_criteria(df, value, api_trader)
+                            if signal:
+                                self.set_trader(value, trade_signal=trade_signal, trade_type="LIMIT")
+                                current_trend = new_trend
 
             """  
             USE WEBSOCKET TO PRINT CURRENT PRICES - IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT  
@@ -647,7 +656,8 @@ class Main(Tasks, TDWebsocket):
                     if current_time < RUN_BACKTEST_TIME:
                         runBacktest = False
 
-                    if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
+                    if SHUTDOWN_TIME > current_time >= TURN_ON_TIME:
+                    # if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
                         self.runTradingPlatform()
 
                     elif not runBacktest:

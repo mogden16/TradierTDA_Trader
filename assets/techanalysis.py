@@ -128,9 +128,9 @@ def calculate_averageDailyRange(value, trader):
     df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
     df = df.set_index('datetime')
 
-    df['dr_pct'] = df.apply(lambda x: 100 * (x['high'] / x['low'] - 1), axis=1)
-    df['ADR_10'] = df['dr_pct'].rolling(window=10).mean()
-    df['ADR_5'] = df['dr_pct'].rolling(window=5).mean()
+    df['dayrange'] = df['high'] - df['low']
+    df['ADR_10'] = df['dayrange'].rolling(window=10).mean()
+    df['ADR_5'] = df['dayrange'].rolling(window=5).mean()
 
     df['hl1'] = df['open'] + (df['ADR_10'] / 2)
     df['ll1'] = df['open'] - (df['ADR_10'] / 2)
@@ -143,8 +143,6 @@ def calculate_averageDailyRange(value, trader):
 def get_TA(value, trader):
 
     symbol = value['Symbol']
-    pre_symbol = value['Pre_Symbol']
-    option_type = value['Option_Type']
 
     active = checkActive()
 
@@ -222,14 +220,37 @@ def buy_criteria(df, value, trader):
     elif SMALLEST_AGGREGATION == 30:
         df_30m = agg_group.get_group(30)
 
+    adr = calculate_averageDailyRange(value, trader)
+
+    # df_5m['hl1'] = adr['hl1']
+    # df_5m['hl2'] = adr['hl2']
+    # df_5m['ll1'] = adr['ll1']
+    # df_5m['ll2'] = adr['hl2']
+
+    df_5m['hl1'] = adr['hl1'].reindex(df_5m.index, method='nearest')
+    df_5m['hl2'] = adr['hl2'].reindex(df_5m.index, method='nearest')
+    df_5m['ll1'] = adr['ll1'].reindex(df_5m.index, method='nearest')
+    df_5m['ll2'] = adr['ll2'].reindex(df_5m.index, method='nearest')
+    df_10m['hl1'] = adr['hl1'].reindex(df_10m.index, method='nearest')
+    df_10m['hl2'] = adr['hl2'].reindex(df_10m.index, method='nearest')
+    df_10m['ll1'] = adr['ll1'].reindex(df_10m.index, method='nearest')
+    df_10m['ll2'] = adr['ll2'].reindex(df_10m.index, method='nearest')
+    df_30m['hl1'] = adr['hl1'].reindex(df_30m.index, method='nearest')
+    df_30m['hl2'] = adr['hl2'].reindex(df_30m.index, method='nearest')
+    df_30m['ll1'] = adr['ll1'].reindex(df_30m.index, method='nearest')
+    df_30m['ll2'] = adr['ll2'].reindex(df_30m.index, method='nearest')
+
+    current_adr = adr.iloc[-1]
+
     pRsiMa = df.columns[-4]
     pFastAtrRsiTL = df.columns[-5]
 
-    # """ SHOW CHART """
-    # df_5m = df_5m.iloc[-150:]
-    # df_10m = df_10m.iloc[-150:]
-    # df_30m = df_30m.iloc[-150:]
-    #
+    """ SHOW CHART """
+    df_5m = df_5m.iloc[-150:]
+    df_10m = df_10m.iloc[-150:]
+    df_30m = df_30m.iloc[-150:]
+
+
     # apd = [
     #     mpf.make_addplot(df_5m[f'{pRsiMa}'],
     #                      type='line', color='green', panel=1),
@@ -238,7 +259,15 @@ def buy_criteria(df, value, trader):
     #     mpf.make_addplot(df_5m[f'hma_fast'],
     #                      type='line', color='green', panel=0),
     #     mpf.make_addplot(df_5m[f'hma_slow'],
-    #                      type='line', color='grey', panel=0)
+    #                      type='line', color='grey', panel=0),
+    #     mpf.make_addplot(df_5m[f'hl1'],
+    #                      type='line', color='green', panel=0),
+    #     mpf.make_addplot(df_5m[f'hl2'],
+    #                      type='line', color='green', panel=0),
+    #     mpf.make_addplot(df_5m[f'll1'],
+    #                      type='line', color='red', panel=0),
+    #     mpf.make_addplot(df_5m[f'll2'],
+    #                      type='line', color='red', panel=0),
     #     ]
     # ape = [
     #     mpf.make_addplot(df_10m[f'{pRsiMa}'],
@@ -248,8 +277,16 @@ def buy_criteria(df, value, trader):
     #     mpf.make_addplot(df_10m[f'hma_fast'],
     #                      type='line', color='green', panel=0),
     #     mpf.make_addplot(df_10m[f'hma_slow'],
-    #                      type='line', color='grey', panel=0)
-    #     ]
+    #                      type='line', color='grey', panel=0),
+    #     mpf.make_addplot(df_10m[f'hl1'],
+    #                      type='line', color='green', panel=0),
+    #     mpf.make_addplot(df_10m[f'hl2'],
+    #                      type='line', color='green', panel=0),
+    #     mpf.make_addplot(df_10m[f'll1'],
+    #                      type='line', color='red', panel=0),
+    #     mpf.make_addplot(df_10m[f'll2'],
+    #                      type='line', color='red', panel=0)
+    # ]
     # apf = [
     #     mpf.make_addplot(df_30m[f'{pRsiMa}'],
     #                      type='line', color='green', panel=1),
@@ -258,11 +295,19 @@ def buy_criteria(df, value, trader):
     #     mpf.make_addplot(df_30m[f'hma_fast'],
     #                      type='line', color='green', panel=0),
     #     mpf.make_addplot(df_30m[f'hma_slow'],
-    #                      type='line', color='grey', panel=0)
+    #                      type='line', color='grey', panel=0),
+    #     mpf.make_addplot(df_30m[f'hl1'],
+    #                      type='line', color='green', panel=0),
+    #     mpf.make_addplot(df_30m[f'hl2'],
+    #                      type='line', color='green', panel=0),
+    #     mpf.make_addplot(df_30m[f'll1'],
+    #                      type='line', color='red', panel=0),
+    #     mpf.make_addplot(df_30m[f'll2'],
+    #                      type='line', color='red', panel=0)
     # ]
     #
     # mpf.plot(
-    #     df_5m,type='candle', volume=True, title=f'{symbol}_5', addplot=apd, main_panel=0, volume_panel=2, block=False
+    #     df_5m, type='candle', volume=True, title=f'{symbol}_5', addplot=apd, main_panel=0, volume_panel=2, block=False
     # )
     # mpf.plot(
     #     df_10m,type='candle', volume=True, title=f'{symbol}_10', addplot=ape, main_panel=0, volume_panel=2, block=False
@@ -272,7 +317,7 @@ def buy_criteria(df, value, trader):
     # )
 
     """ RUN STRATEGY """
-    adr = calculate_averageDailyRange(value, trader)
+
     twolast_5m_bar = df_5m.iloc[-3]
     last_5m_bar = df_5m.iloc[-2]
     current_10m_bar = df_10m.iloc[-1]
@@ -353,3 +398,39 @@ def sell_criteria(df, value):
             return True
 
 
+def openCV_criteria(df, value, trader):
+
+    adr = calculate_averageDailyRange(value, trader)
+    symbol = value['Symbol']
+
+    agg_group = df.groupby('agg')
+
+    if SMALLEST_AGGREGATION == 5:
+        df_5m = agg_group.get_group(5)
+        df_10m = agg_group.get_group(10)
+        df_30m = agg_group.get_group(30)
+
+    last_5m_bar = df_5m.iloc[-2]
+    current_5m_bar = df_5m.iloc[-1]
+    current_10m_bar = df_10m.iloc[-1]
+    last_10m_bar = df_10m.iloc[-2]
+    current_30m_bar = df_30m.iloc[-1]
+    current_adr = adr.iloc[-1]
+
+    if value['Option_Type'].upper() == "CALL":
+
+        if (current_adr['hl1'] <= current_5m_bar['close'] <= current_adr['hl2']) or \
+                (current_adr['hl1'] <= current_5m_bar['high'] <= current_adr['hl2']) or \
+                (current_adr['hl1'] <= current_5m_bar['low'] <= current_adr['hl2']) or \
+                (current_adr['hl1'] <= current_5m_bar['open'] <= current_adr['hl2']):
+            return False
+
+    elif value['Option_Type'].upper() == "PUT":
+
+        if (current_adr['ll1'] <= current_5m_bar['close'] <= current_adr['ll2']) or \
+                (current_adr['ll1'] <= current_5m_bar['high'] <= current_adr['ll2']) or \
+                (current_adr['ll1'] <= current_5m_bar['low'] <= current_adr['ll2']) or \
+                (current_adr['ll1'] <= current_5m_bar['open'] <= current_adr['ll2']):
+            return False
+
+    return True

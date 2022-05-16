@@ -56,7 +56,7 @@ class TradierTrader(tradierOrderBuilder):
                                 )
         json_response = response.json()
         # print(response.status_code)
-        print(json_response)
+        # print(json_response)
 
     @exception_handler
     def get_quote(self, polygon_symbol):

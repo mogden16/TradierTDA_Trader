@@ -58,7 +58,6 @@ TRADE_MULTI_STRIKES = False  # TRADE DIFFERENT STRIKES OF SAME UNDERLYING SYMBOL
 
 ###################     TECHNICAL ANALYSIS   ####################
 RUN_TA = True
-RUN_30M_TA = False
 RUN_SELL_TA = True
 
 

@@ -13,8 +13,8 @@ OPTION_PRICE_INCREMENT = config.OPTION_PRICE_INCREMENT
 
 def run(alertScanner, current_trend):
     switcher = {
-        "BUY": 1,
-        "SELL": -1,
+        "BUY": "CALL",
+        "SELL": "PUT",
         "CLOSE": 0,
         "Not Available": 99999
     }

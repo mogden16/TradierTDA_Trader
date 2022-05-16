@@ -68,7 +68,7 @@ def selectSleep():
     # IF CURRENT TIME GREATER THAN 8PM AND LESS THAN 4AM, OR DAY IS WEEKEND, THEN RETURN 60 SECONDS
     if tm > "20:00" or tm < "04:00" or day in weekends:
 
-        return 20
+        return 5
 
     # ELSE RETURN 1 SECOND
     return 1
@@ -77,6 +77,7 @@ def selectSleep():
 def modifiedAccountID(account_id):
 
     return '*' * (len(str(account_id)) - 4) + str(account_id)[-4:]
+
 
 def formatGmailAlerts(trade_data):
 
