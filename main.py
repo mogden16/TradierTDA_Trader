@@ -563,7 +563,7 @@ class Main(Tasks, TDWebsocket):
                                     if sell_signal:
                                         if RUN_LIVE_TRADER:
                                             if RUN_TRADIER:
-                                                self.tradier.cancel_order(str(open_position['Order_ID']))
+                                                self.tradier.cancel_order(open_position['Order_ID'])
                                                 self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
                                             else:
                                                 print('no exit criteria for TD intraday technical analysis yet')

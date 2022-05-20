@@ -335,16 +335,17 @@ def buy_criteria(df, value, trader):
         elif (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and \
                 (twolast_5m_bar[pRsiMa] < twolast_5m_bar[pFastAtrRsiTL]) and \
                 (current_30m_bar[pRsiMa] > RSILOWNEUTRAL) and \
-                (last_10m_bar['hma_fast'] >= last_10m_bar['hma_slow']):
+                (last_10m_bar['hma_fast'] >= last_10m_bar['hma_slow']) and \
+                (current_30m_bar[pRsiMa] < RSISUPEROVERBOUGHT):
             message = f"Buying CALL for {pre_symbol} because QQE Cross UP & Current 30m QQE is above 45"
-            discord_helpers.send_discord_alert(message)
+            # discord_helpers.send_discord_alert(message)
             print(message)
             return True
 
         else:
             if (current_adr['ll1'] <= current_10m_bar['close'] <= current_adr['ll2']) and (current_30m_bar[pRsiMa] > RSIHIGHNEUTRAL):
                 message = f"Buying because CALL is at bottom of ADR & 30m QQE is over 55"
-                discord_helpers.send_discord_alert(message)
+                # discord_helpers.send_discord_alert(message)
                 print(message)
                 return True
 
@@ -357,16 +358,17 @@ def buy_criteria(df, value, trader):
         elif (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and \
                 (twolast_5m_bar[pRsiMa] > twolast_5m_bar[pFastAtrRsiTL]) and \
                 (current_30m_bar[pRsiMa] < RSIHIGHNEUTRAL) and \
-                (last_10m_bar['hma_fast'] <= last_10m_bar['hma_slow']):
+                (last_10m_bar['hma_fast'] <= last_10m_bar['hma_slow']) and \
+                (current_30m_bar[pRsiMa] > RSISUPEROVERSOLD):
             message = f"Buying PUT for {pre_symbol} because QQE Cross DOWN & Current 30m QQE is below 55"
-            discord_helpers.send_discord_alert(message)
+            # discord_helpers.send_discord_alert(message)
             print(message)
             return True
 
         else:
             if (current_adr['hl1'] <= current_10m_bar['close'] <= current_adr['hl2']) and (current_30m_bar[pRsiMa] < RSILOWNEUTRAL):
                 message = f"Buying because PUT is at top of ADR & 30m QQE is below 45"
-                discord_helpers.send_discord_alert(message)
+                # discord_helpers.send_discord_alert(message)
                 print(message)
                 return True
 
