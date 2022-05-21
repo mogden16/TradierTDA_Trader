@@ -657,8 +657,8 @@ class Main(Tasks, TDWebsocket):
                     if current_time < RUN_BACKTEST_TIME:
                         runBacktest = False
 
-                    if SHUTDOWN_TIME > current_time >= TURN_ON_TIME:
-                    # if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
+                    # if SHUTDOWN_TIME > current_time >= TURN_ON_TIME:
+                    if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
                         self.runTradingPlatform()
 
                     elif not runBacktest:
