@@ -11,10 +11,12 @@ IS_TESTING = config.IS_TESTING
 BUY_PRICE = config.BUY_PRICE
 SELL_PRICE = config.SELL_PRICE
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
+RUNNER_TAKE_PROFIT_PERCENTAGE = config.RUNNER_TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
 TRAIL_STOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 RUNNER_FACTOR = config.RUNNER_FACTOR
 RUN_WEBSOCKET = config.RUN_WEBSOCKET
+
 
 
 class OrderBuilder:
@@ -198,8 +200,10 @@ class OrderBuilder:
 
             else:
 
-                self.logger.warning(
-                    f"{side} ORDER STOPPED: STRATEGY STATUS - {strategy_object['Active']} SHARES - {shares}")
+                message = f"{side} ORDER STOPPED: STRATEGY STATUS - {strategy_object['Active']} SHARES - {shares} - " \
+                          f"isRunner: {isRunner}"
+                self.logger.warning(message)
+                discord_helpers.send_discord_alert(message)
 
                 return None, None
 
@@ -236,17 +240,27 @@ class OrderBuilder:
         order, obj = self.standardOrder(
             trade_data, strategy_object, direction, OCOorder=True)
 
+        if order is None and obj is None:
+            return None, None
+
         asset_type = "OPTION" if "Pre_Symbol" in trade_data else "EQUITY"
 
         side = trade_data["Side"]
 
-        take_profit_price = round(order["price"] * TAKE_PROFIT_PERCENTAGE, 2) \
-            if order["price"] * TAKE_PROFIT_PERCENTAGE >= 1 \
-            else round(order["price"] * TAKE_PROFIT_PERCENTAGE, 4)
+        isRunner = trade_data['isRunner'] == "TRUE"
 
-        stop_price = round(order["price"] * STOP_LOSS_PERCENTAGE, 2) \
-            if order["price"] * STOP_LOSS_PERCENTAGE >= 1 \
-            else round(order["price"] * STOP_LOSS_PERCENTAGE, 4)
+        if isRunner:
+            take_profit_price = round(order["price"] * (1+RUNNER_TAKE_PROFIT_PERCENTAGE), 2) \
+                if order["price"] * (1+RUNNER_TAKE_PROFIT_PERCENTAGE) >= 1 \
+                else round(order["price"] * (1+RUNNER_TAKE_PROFIT_PERCENTAGE), 4)
+        else:
+            take_profit_price = round(order["price"] * (1+TAKE_PROFIT_PERCENTAGE), 2) \
+                if order["price"] * (1+TAKE_PROFIT_PERCENTAGE) >= 1 \
+                else round(order["price"] * (1+TAKE_PROFIT_PERCENTAGE), 4)
+
+        stop_price = round(order["price"] * (1-STOP_LOSS_PERCENTAGE), 2) \
+            if order["price"] * (1-STOP_LOSS_PERCENTAGE) >= 1 \
+            else round(order["price"] * (1-STOP_LOSS_PERCENTAGE), 4)
 
         # GET THE INVERSE OF THE SIDE
         #####################################

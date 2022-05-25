@@ -1,12 +1,12 @@
 import config
 import polygon
 from assets.helper_functions import getDatetime
-from tdameritrade import TDAmeritrade
 
 RUNNER_FACTOR = config.RUNNER_FACTOR
 IS_TESTING = config.IS_TESTING
 
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
+RUNNER_TAKE_PROFIT_PERCENTAGE = config.RUNNER_TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
 GET_PRICE_FROM_TD = config.GET_PRICE_FROM_TD
 
@@ -170,9 +170,9 @@ class tradierOrderBuilder:
             print(f'otoco trades cannot be done with equtities')
             return
 
-        isRunner = trade_data['isRunner']
+        isRunner = trade_data['isRunner'] == "TRUE"
 
-        if isRunner == "TRUE":
+        if isRunner:
 
             runnerFactor = RUNNER_FACTOR
 
@@ -192,7 +192,8 @@ class tradierOrderBuilder:
 
                 if GET_PRICE_FROM_TD:
 
-                    resp = mongo_trader.tdameritrade.getQuote(symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"])
+                    resp = mongo_trader.tdameritrade.getQuote(symbol if asset_type == "EQUITY" else
+                                                              trade_data["Pre_Symbol"])
 
                     if asset_type == "EQUITY":
                         if side in ['BUY', 'BUY_TO_OPEN', 'BUY_TO_CLOSE']:
@@ -228,6 +229,9 @@ class tradierOrderBuilder:
 
         qty = int(position_size/price) if asset_type == "EQUITY" else int((position_size / 100)/price)
 
+        if qty == 0:
+            return None, None
+
         # base order
         self.order['account_id'] = self.account_id
         self.order['class'] = 'otoco'
@@ -245,7 +249,8 @@ class tradierOrderBuilder:
         self.order['type[1]'] = 'limit'
         self.order['option_symbol[1]'] = trading_symbol
         self.order['side[1]'] = 'sell_to_close'
-        self.order['price[1]'] = str(round(entry_price * (1 + TAKE_PROFIT_PERCENTAGE),2))
+        self.order['price[1]'] = str(round(entry_price * (1 + TAKE_PROFIT_PERCENTAGE), 2)) if not isRunner else \
+            str(round(entry_price * (1 + RUNNER_TAKE_PROFIT_PERCENTAGE), 2))
 
         # stoploss order
         self.order['symbol[2]'] = symbol
@@ -253,7 +258,7 @@ class tradierOrderBuilder:
         self.order['type[2]'] = 'stop'
         self.order['option_symbol[2]'] = trading_symbol
         self.order['side[2]'] = 'sell_to_close'
-        self.order['stop[2]'] = str(round(entry_price * (1 - STOP_LOSS_PERCENTAGE),2))
+        self.order['stop[2]'] = str(round(entry_price * (1 - STOP_LOSS_PERCENTAGE), 2))
 
         self.obj['Strategy'] = strategy
         self.obj['Symbol'] = symbol

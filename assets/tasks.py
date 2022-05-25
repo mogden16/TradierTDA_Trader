@@ -15,6 +15,7 @@ from assets.helper_functions import getDatetime, selectSleep, modifiedAccountID
 from discord import discord_helpers
 
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
+RUNNER_TAKE_PROFIT_PERCENTAGE = config.RUNNER_TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
 TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 RUN_TRADIER = config.RUN_TRADIER
@@ -346,6 +347,7 @@ class Tasks:
         Data will be used by checkOCOtriggers with order ids to see if stop loss or take profit has been triggered.
 
         """
+        isRunner = spec_order['isRunner'] == "TRUE"
 
         oco_children = {
             "childOrderStrategies": {}
@@ -366,6 +368,8 @@ class Tasks:
 
         else:
 
+            tp_percentage = RUNNER_TAKE_PROFIT_PERCENTAGE if isRunner else TAKE_PROFIT_PERCENTAGE
+
             for i in range(0, 2):
 
                 oco_children['childOrderStrategies'][str(i)] = {
@@ -377,7 +381,7 @@ class Tasks:
 
                 if i == 0:
                     oco_children['childOrderStrategies'][str(i)]['Takeprofit_Price'] = \
-                        round(spec_order["price"] * (1+TAKE_PROFIT_PERCENTAGE), 2)
+                        round(spec_order["price"] * (1+tp_percentage), 2)
 
                 else:
                     oco_children['childOrderStrategies'][str(i)]['Stop_Price'] = \

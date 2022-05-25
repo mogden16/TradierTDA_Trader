@@ -244,7 +244,8 @@ class ApiTrader(OrderBuilder):
 
                 custom = {
                     "price": queue_order["Entry_Price"] if queue_order["Direction"] == "OPEN POSITION" else queue_order["Exit_Price"],
-                    "shares": queue_order["Qty"]
+                    "shares": queue_order["Qty"],
+                    "isRunner": queue_order['isRunner']
                 }
 
                 # IF RUNNING LIVE TRADER, THEN ASSUME DATA
@@ -551,6 +552,8 @@ class ApiTrader(OrderBuilder):
 
         pre_symbol = row["Pre_Symbol"]
 
+        isRunner = row['isRunner'] == "TRUE"
+
         # CHECK OPEN POSITIONS AND QUEUE
         if TRADE_MULTI_STRIKES:
             open_position = self.open_positions.find_one(
@@ -582,7 +585,15 @@ class ApiTrader(OrderBuilder):
 
         row["Position_Type"] = position_type
 
-        if not queued:
+        if isRunner:
+
+            direction = "OPEN POSITION"
+
+            self.sendOrder(row, strategy_object, direction)
+
+            return
+
+        elif not queued:
 
             direction = None
 

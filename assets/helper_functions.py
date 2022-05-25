@@ -14,6 +14,7 @@ SELL_ALL_POSITIONS = config.SELL_ALL_POSITIONS
 TURN_OFF_TRADES = config.TURN_OFF_TRADES
 SHUTDOWN_TIME = config.SHUTDOWN_TIME
 MIN_DTE = config.MIN_DTE
+ITM_OR_OTM = config.ITM_OR_OTM
 
 
 def getDatetime():
@@ -175,3 +176,24 @@ def find_option_expDate(trader, symbol):
         new_dte += 1
 
     return option_exp_date
+
+
+def get_contracts(trader, trade_symbol, option_type, exp_date):
+
+    url = f"https://api.tdameritrade.com/v1/marketdata/chains?" \
+          f"symbol={trade_symbol}" \
+          f"&contractType={option_type}" \
+          f"&strikeCount=5" \
+          f"&includeQuotes=False" \
+          f"&strategy=SINGLE" \
+          f"&range={ITM_OR_OTM}" \
+          f"&fromDate={exp_date}" \
+          f"&toDate={exp_date}"
+
+    resp = trader.tdameritrade.sendRequest(url)
+
+
+
+
+
+

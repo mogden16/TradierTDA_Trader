@@ -635,6 +635,8 @@ class TradierTrader(tradierOrderBuilder):
 
         pre_symbol = row["Pre_Symbol"]
 
+        isRunner = row['isRunner'] == "TRUE"
+
         # CHECK OPEN POSITIONS AND QUEUE
         if TRADE_MULTI_STRIKES:
             open_position = self.mongo.open_positions.find_one(
@@ -670,7 +672,15 @@ class TradierTrader(tradierOrderBuilder):
 
         row["Position_Type"] = position_type
 
-        if not queued:
+        if isRunner:
+
+            direction = "OPEN POSITION"
+
+            self.sendOrder(row, mongo_trader, strategy_object, direction, special_order_type)
+
+            return
+
+        elif not queued:
 
             direction = None
 

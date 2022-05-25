@@ -33,6 +33,8 @@ DAY_TRADE = config.DAY_TRADE
 RUN_TRADIER = config.RUN_TRADIER
 RUN_DISCORD = config.RUN_DISCORD
 RUN_GMAIL = config.RUN_GMAIL
+RUN_LIST = config.RUN_LIST
+TICKER_LIST = config.TICKER_LIST
 IS_TESTING = config.IS_TESTING
 TRADE_HEDGES = config.TRADE_HEDGES
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
@@ -50,6 +52,7 @@ RUN_OPENCV = config.RUN_OPENCV
 ITM_OR_OTM = config.ITM_OR_OTM.upper()
 OPTION_PRICE_INCREMENT = config.OPTION_PRICE_INCREMENT
 TRADE_SYMBOL = config.TRADE_SYMBOL.upper()
+ADD_RUNNING_ORDERS = config.ADD_RUNNING_ORDERS
 
 
 class Main(Tasks, TDWebsocket):
@@ -181,14 +184,14 @@ class Main(Tasks, TDWebsocket):
             newAlerts WILL FILTER OUT THE ALERTS & POPULATE c.OPTIONLIST.
         """
 
-        trade_alerts = []
+        alerts = []
         if RUN_DISCORD:
             discord_alerts = discord_scanner.discord_messages(start_time, mins=2)
             if discord_alerts != None:
                 for alert in discord_alerts:
                     position = mongo_helpers.find_mongo_analysisPosition(self, alert['Pre_Symbol'], alert['Entry_Date'])
                     if position != True:
-                        trade_alerts.append(alert)
+                        alerts.append(alert)
 
         if RUN_GMAIL:
             gmail_alerts = self.gmail.getEmails()
@@ -197,9 +200,9 @@ class Main(Tasks, TDWebsocket):
                 for alert in gmail_alerts:
                     position = mongo_helpers.find_mongo_analysisPosition(self, alert['Pre_Symbol'], alert['Entry_Date'])
                     if position != True:
-                        trade_alerts.append(alert)
+                        alerts.append(alert)
 
-        return trade_alerts
+        return alerts
 
     def OPTIONLIST_find_one(self, alert):
         symbol = alert['Symbol']
@@ -271,11 +274,14 @@ class Main(Tasks, TDWebsocket):
                                     for api_trader in self.traders.values():
                                         df = techanalysis.get_TA(alert, api_trader)
                                         buy_signal = techanalysis.buy_criteria(df, alert, api_trader)
-
                                         """  IF BUY SIGNAL == TRUE THEN BUY!  """
                                         if buy_signal:
                                             c.OPTIONLIST.append(alert)
                                             self.set_trader(alert, trade_signal="BUY", trade_type="LIMIT")
+                                            if ADD_RUNNING_ORDERS:
+                                                time.sleep(60)
+                                                self.set_trader(alert, trade_signal="BUY", trade_type="LIMIT",
+                                                                isRunner=True)
                                             c.DONTTRADELIST.append(alert)
                                         else:
                                             position = self.OPTIONLIST_find_one(alert)
@@ -479,17 +485,17 @@ class Main(Tasks, TDWebsocket):
         SHUT_DOWN = False
         current_trend = None
 
-        while connected:
+        """  THIS INITIATES THE TD INSTANCE  """
+        self.setupTraders()
 
-            """  THIS RUNS THE TD INSTANCE  """
-            self.setupTraders()
+        while connected:
 
             """  CHECK THE TIME  """
             current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
 
             """  SELL OUT OF ALL POSITIONS AT SELL_ALL_POSITION TIME  """
-            if DAY_TRADE:
-                if SHUTDOWN_TIME > current_time > SELL_ALL_POSITIONS and not SHUT_DOWN:
+            if DAY_TRADE and not SHUT_DOWN:
+                if SHUTDOWN_TIME > current_time > SELL_ALL_POSITIONS:
                     print("Shutdown time has passed, all positions now CLOSING")
                     if RUN_TRADIER:
                         self.tradier.cancelALLorders()
@@ -544,6 +550,8 @@ class Main(Tasks, TDWebsocket):
                                 """  IF BUY SIGNAL == TRUE THEN BUY!  """
                                 if buy_signal:
                                     self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
+                                    if ADD_RUNNING_ORDERS:
+                                        self.set_trader(value, trade_signal="BUY", trade_type="LIMIT", isRunner=True)
                                     c.DONTTRADELIST.append(value)
 
                     """
@@ -612,6 +620,8 @@ class Main(Tasks, TDWebsocket):
                             signal = techanalysis.openCV_criteria(df, value, api_trader)
                             if signal:
                                 self.set_trader(value, trade_signal=trade_signal, trade_type="LIMIT")
+                                if ADD_RUNNING_ORDERS:
+                                    self.set_trader(value, trade_signal="BUY", trade_type="LIMIT", isRunner=True)
                                 current_trend = new_trend
 
             """  
@@ -657,8 +667,8 @@ class Main(Tasks, TDWebsocket):
                     if current_time < RUN_BACKTEST_TIME:
                         runBacktest = False
 
-                    # if SHUTDOWN_TIME > current_time >= TURN_ON_TIME:
-                    if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
+                    if SHUTDOWN_TIME > current_time >= TURN_ON_TIME:
+                    # if SHUTDOWN_TIME > current_time >= TURN_ON_TIME and day not in weekends:
                         self.runTradingPlatform()
 
                     elif not runBacktest:
