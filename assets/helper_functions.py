@@ -178,19 +178,65 @@ def find_option_expDate(trader, symbol):
     return option_exp_date
 
 
-def get_contracts(trader, trade_symbol, option_type, exp_date):
+def get_contracts(trader, value):
+    contracts = []
+
+    trade_symbol = value['Symbol']
+    option_type = value['Option_Type']
+    exp_date = value['Exp_Date']
+    strategy = value['Strategy']
 
     url = f"https://api.tdameritrade.com/v1/marketdata/chains?" \
           f"symbol={trade_symbol}" \
           f"&contractType={option_type}" \
           f"&strikeCount=5" \
-          f"&includeQuotes=False" \
+          f"&includeQuotes=TRUE" \
           f"&strategy=SINGLE" \
           f"&range={ITM_OR_OTM}" \
           f"&fromDate={exp_date}" \
           f"&toDate={exp_date}"
 
     resp = trader.tdameritrade.sendRequest(url)
+
+    expdatemapkey = option_type.lower() + "ExpDateMap"
+    for dt in resp[expdatemapkey]:
+        x = 0
+        for strikePrice in resp[expdatemapkey][dt]:
+            option_symbol = resp[expdatemapkey][dt][strikePrice][0]["symbol"]
+            ask = float(resp[expdatemapkey][dt][strikePrice][0]["ask"])
+            bid = float(resp[expdatemapkey][dt][strikePrice][0]["bid"])
+            last = float(resp[expdatemapkey][dt][strikePrice][0]["last"])
+            volume = float(resp[expdatemapkey][dt][strikePrice][0]["totalVolume"])
+            delta = float(resp[expdatemapkey][dt][strikePrice][0]["delta"])
+            oi = float(resp[expdatemapkey][dt][strikePrice][0]["openInterest"])
+
+            if ask > config.MAX_OPTIONPRICE or ask < config.MIN_OPTIONPRICE or volume < config.MIN_VOLUME \
+                    or abs(delta) < config.MIN_DELTA:
+
+                continue
+
+            else:
+
+                obj = {
+                    "Symbol": trade_symbol,
+                    "Side": "BUY_TO_OPEN",
+                    "Pre_Symbol": option_symbol,
+                    "Exp_Date": f'{exp_date}',
+                    "Strike_Price": str(strikePrice) if str(strikePrice)[-2]==".0" else str(strikePrice),
+                    "Option_Type": option_type,
+                    "Strategy": strategy,
+                    "Asset_Type": "OPTION",
+                    "Entry_Date": getDatetime()
+                }
+
+                contracts.append(obj)
+                x += 1
+
+                if x == 2:
+                    return contracts
+
+    return contracts
+
 
 
 

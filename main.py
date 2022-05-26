@@ -45,6 +45,7 @@ TURN_OFF_TRADES = config.TURN_OFF_TRADES
 SELL_ALL_POSITIONS = config.SELL_ALL_POSITIONS
 SHUTDOWN_TIME = config.SHUTDOWN_TIME
 RUN_TASKS = config.RUN_TASKS
+RUN_TA = config.RUN_TA
 RUN_BACKTEST_TIME = config.RUN_BACKTEST_TIME
 TEST_CLOSED_POSITIONS = config.TEST_CLOSED_POSITIONS
 TEST_ANALYSIS_POSITIONS = config.TEST_ANALYSIS_POSITIONS
@@ -201,6 +202,7 @@ class Main(Tasks, TDWebsocket):
                     position = mongo_helpers.find_mongo_analysisPosition(self, alert['Pre_Symbol'], alert['Entry_Date'])
                     if position != True:
                         alerts.append(alert)
+
 
         return alerts
 
@@ -479,11 +481,9 @@ class Main(Tasks, TDWebsocket):
         print(message)
 
         connected = self.connectALL()
-
         alertScanner = AlertScanner.AlertScanner()
         initiation = False
-        SHUT_DOWN = False
-        current_trend = None
+        shut_down = False
 
         """  THIS INITIATES THE TD INSTANCE  """
         self.setupTraders()
@@ -494,7 +494,8 @@ class Main(Tasks, TDWebsocket):
             current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
 
             """  SELL OUT OF ALL POSITIONS AT SELL_ALL_POSITION TIME  """
-            if DAY_TRADE and not SHUT_DOWN:
+            turn_off_trades = False
+            if DAY_TRADE and not shut_down:
                 if SHUTDOWN_TIME > current_time > SELL_ALL_POSITIONS:
                     print("Shutdown time has passed, all positions now CLOSING")
                     if RUN_TRADIER:
@@ -504,27 +505,42 @@ class Main(Tasks, TDWebsocket):
                         self.set_trader(open_position, trade_signal="CLOSE", trade_type="MARKET")
                     SHUT_DOWN = True
 
-            """  ONCE MARKET IS CLOSED CLOSED, CLOSE ALL CONNECTIONS TO MONGO  """
-            if current_time >= SHUTDOWN_TIME:
-                self.isAlive = False
-                time.sleep(2)
-                disconnect = mongo_helpers.disconnect(self)
-                if disconnect:
-                    connected = False
-                    message = f'Bot is shutting down, its currently: {self.start_time}'
-                    discord_helpers.send_discord_alert(message)
-                    print(message)
-                    break
+                    """  ONCE MARKET IS CLOSED CLOSED, CLOSE ALL CONNECTIONS TO MONGO  """
+                    self.isAlive = False
+                    time.sleep(2)
+                    disconnect = mongo_helpers.disconnect(self)
+                    if disconnect:
+                        connected = False
+                        message = f'Bot is shutting down, its currently: {self.start_time}'
+                        discord_helpers.send_discord_alert(message)
+                        print(message)
+                        break
 
-            elif current_time > TURN_OFF_TRADES:
-                print(f'It is {TURN_OFF_TRADES}, closing all queued trades')
-                c.OPTIONLIST.clear()
+                elif current_time > TURN_OFF_TRADES and not turn_off_trades:
+                    print(f'It is {TURN_OFF_TRADES}, closing all queued trades')
+                    c.OPTIONLIST.clear()
+                    turn_off_trades = True
 
             """  THIS WILL COMPILE THE ALERTS FROM DISCORD & GMAIL  """
             trade_alerts = self.get_alerts(self.start_time)
 
             """  THIS WILL PUT ALL ALERTS INTO C.OPTIONLIST TO BE TRADED & DO AN INITIAL BUY SCAN """
-            self.set_alerts(trade_alerts)
+            for api_trader in self.traders.values():
+                for alert in trade_alerts:
+                    if RUN_TA:
+                        df = techanalysis.get_TA(alert, api_trader)
+                        buy_signal = techanalysis.buy_criteria(df, alert, api_trader)
+                        if buy_signal:
+
+                            self.set_trader(alert, trade_signal="BUY", trade_type="LIMIT")
+                            if ADD_RUNNING_ORDERS:
+                                self.set_trader(alert, trade_signal="BUY", trade_type="LIMIT", isRunner=True)
+                            c.DONTTRADELIST.append(alert)
+                    else:
+                        self.set_trader(alert, trade_signal="BUY", trade_type="LIMIT")
+                        if ADD_RUNNING_ORDERS:
+                            self.set_trader(alert, trade_signal="BUY", trade_type="LIMIT", isRunner=True)
+                        c.DONTTRADELIST.append(alert)
 
             """  CLEAN UP OUR OLD ORDERS  """
             for order in c.DONTTRADELIST:
@@ -588,41 +604,15 @@ class Main(Tasks, TDWebsocket):
             """" 
             RUN OPENCV FOR config.TRADE_SYMBOL ONLY 
             """
-            if RUN_OPENCV and not SHUT_DOWN:
-                switcher = {
-                    "BUY": "CALL",
-                    "SELL": "PUT",
-                    "CLOSE": 0,
-                    "Not Available": 99999
-                }
-
-                trade_signal = alertScanner.scanVisualAlerts()
-                print(f'current_trend: {trade_signal}')
-                new_trend = switcher.get(trade_signal)
-                if initiation is False:
-                    current_trend = new_trend
-                    initiation = True
-
-                if trade_signal is not None and new_trend != current_trend:
-                    message = f'TradingBOT just saw a possible trade: {trade_signal}'
-                    discord_helpers.send_discord_alert(message)
-                    print(message)
-
-                    tos_signal = run_opencv.run(alertScanner, new_trend)
-                    if tos_signal:
-                        value = {
-                            "Symbol": TRADE_SYMBOL,
-                            "Strategy": "OpenCV",
-                            "Option_Type": trade_signal
-                        }
-                        for api_trader in self.traders.values():
-                            df = techanalysis.get_TA(value, api_trader)
-                            signal = techanalysis.openCV_criteria(df, value, api_trader)
-                            if signal:
-                                self.set_trader(value, trade_signal=trade_signal, trade_type="LIMIT")
-                                if ADD_RUNNING_ORDERS:
-                                    self.set_trader(value, trade_signal="BUY", trade_type="LIMIT", isRunner=True)
-                                current_trend = new_trend
+            value = run_opencv.main(alertScanner, initiation, shut_down)
+            if value is not None:
+                for api_trader in self.traders.values():
+                    df = techanalysis.get_TA(value, api_trader)
+                    signal = techanalysis.openCV_criteria(df, value, api_trader)
+                    if signal:
+                        self.set_trader(value, trade_signal="BUY", trade_type="LIMIT")
+                        if ADD_RUNNING_ORDERS:
+                            self.set_trader(value, trade_signal="BUY", trade_type="LIMIT", isRunner=True)
 
             """  
             USE WEBSOCKET TO PRINT CURRENT PRICES - IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT  

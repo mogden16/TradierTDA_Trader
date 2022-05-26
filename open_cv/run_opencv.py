@@ -1,14 +1,15 @@
 import config
 import time
 import math
-from open_cv import AlertScanner
 from discord import discord_helpers
-import pandas as pd
 
 SCAN_TIMES = config.SCAN_TIMES
 SLEEP_AFTER_SCAN = config.SLEEP_AFTER_EACH_SCAN
 ITM_OR_OTM = config.ITM_OR_OTM
 OPTION_PRICE_INCREMENT = config.OPTION_PRICE_INCREMENT
+TRADE_SYMBOL = config.TRADE_SYMBOL
+RUN_OPENCV = config.RUN_OPENCV
+
 
 
 def run(alertScanner, current_trend):
@@ -93,3 +94,38 @@ def get_optioncontract(trader, trade_symbol, exp_date, option_type):
                         delta = resp[expdatemapkey][dt][strikePrice][0]["delta"]
 
     return resp
+
+
+def main(alertScanner, initiation, shut_down):
+    """"
+    RUN OPENCV FOR config.TRADE_SYMBOL ONLY
+    """
+    if RUN_OPENCV and not shut_down:
+        switcher = {
+            "BUY": "CALL",
+            "SELL": "PUT",
+            "CLOSE": 0,
+            "Not Available": 99999
+        }
+
+        trade_signal = alertScanner.scanVisualAlerts()
+        print(f'current_trend: {trade_signal}')
+        new_trend = switcher.get(trade_signal)
+        if initiation is False:
+            current_trend = new_trend
+            initiation = True
+
+        if trade_signal is not None and new_trend != current_trend:
+            message = f'TradingBOT just saw a possible trade: {trade_signal}'
+            discord_helpers.send_discord_alert(message)
+            print(message)
+
+            tos_signal = run(alertScanner, new_trend)
+            if tos_signal:
+                value = {
+                    "Symbol": TRADE_SYMBOL,
+                    "Strategy": "OpenCV",
+                    "Option_Type": trade_signal
+                }
+
+    return value

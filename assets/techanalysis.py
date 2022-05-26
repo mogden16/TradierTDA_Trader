@@ -75,7 +75,7 @@ def set_aggregations():
         aggs = {
             "lowestAggregation": 5,
             "middleAggregation": 10,
-            "highestAggregation": 15,
+            # "highestAggregation": 15,
             "extraHighAggregation": 30,
             "xxlAggregation": None
         }
@@ -119,8 +119,7 @@ def get_pricehistory():
     pass
 
 
-def calculate_averageDailyRange(value, trader):
-    symbol = value['Symbol']
+def calculate_averageDailyRange(symbol, trader):
     endDate = int(datetime.now().timestamp()) * 1000
     url = f"https://api.tdameritrade.com/v1/marketdata/{symbol}/pricehistory?periodType=month&period=1&frequencyType=daily&frequency=1&endDate={endDate}"
     resp = trader.tdameritrade.sendRequest(url)
@@ -191,7 +190,6 @@ def get_TA(value, trader):
 
 def buy_criteria(df, value, trader):
     symbol = value['Symbol']
-    pre_symbol = value['Pre_Symbol']
 
     agg_group = df.groupby('agg')
 
@@ -205,7 +203,7 @@ def buy_criteria(df, value, trader):
     elif SMALLEST_AGGREGATION == 5:
         df_5m = agg_group.get_group(5)
         df_10m = agg_group.get_group(10)
-        df_15m = agg_group.get_group(15)
+        # df_15m = agg_group.get_group(15)
         df_30m = agg_group.get_group(30)
 
     elif SMALLEST_AGGREGATION == 10:
@@ -330,14 +328,14 @@ def buy_criteria(df, value, trader):
 
         if (current_10m_bar['high'] > (current_adr['hl2'] or current_adr['hl1'])) and \
                 (current_10m_bar['close'] <= (current_adr['hl1'] or current_adr['hl2'])):
-            print(f'called for CALL for {pre_symbol} but in HIGH resistance zone')
+            print(f'called for CALL for {symbol} but in HIGH resistance zone')
 
         elif (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and \
                 (twolast_5m_bar[pRsiMa] < twolast_5m_bar[pFastAtrRsiTL]) and \
                 (current_30m_bar[pRsiMa] > RSILOWNEUTRAL) and \
                 (last_10m_bar['hma_fast'] >= last_10m_bar['hma_slow']) and \
                 (current_30m_bar[pRsiMa] < RSISUPEROVERBOUGHT):
-            message = f"Buying CALL for {pre_symbol} because QQE Cross UP & Current 30m QQE is above 45"
+            message = f"Buying CALL for {symbol} because QQE Cross UP & Current 30m QQE is above 45"
             # discord_helpers.send_discord_alert(message)
             print(message)
             return True
@@ -353,14 +351,14 @@ def buy_criteria(df, value, trader):
 
         if (current_10m_bar['low'] < (current_adr['ll2'] or current_adr['ll1'])) and \
                 (current_10m_bar['close'] >= (current_adr['ll1'] or current_adr['ll2'])):
-            print(f'called for PUT for {pre_symbol} but in LOW resistance zone')
+            print(f'called for PUT for {symbol} but in LOW resistance zone')
 
         elif (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and \
                 (twolast_5m_bar[pRsiMa] > twolast_5m_bar[pFastAtrRsiTL]) and \
                 (current_30m_bar[pRsiMa] < RSIHIGHNEUTRAL) and \
                 (last_10m_bar['hma_fast'] <= last_10m_bar['hma_slow']) and \
                 (current_30m_bar[pRsiMa] > RSISUPEROVERSOLD):
-            message = f"Buying PUT for {pre_symbol} because QQE Cross DOWN & Current 30m QQE is below 55"
+            message = f"Buying PUT for {symbol} because QQE Cross DOWN & Current 30m QQE is below 55"
             # discord_helpers.send_discord_alert(message)
             print(message)
             return True
@@ -371,6 +369,8 @@ def buy_criteria(df, value, trader):
                 # discord_helpers.send_discord_alert(message)
                 print(message)
                 return True
+
+    return False
 
 
 def sell_criteria(df, value):
