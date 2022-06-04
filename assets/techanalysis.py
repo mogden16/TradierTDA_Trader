@@ -179,10 +179,10 @@ def get_TA(value, trader):
 
                 """ QQE """
                 df_qqe = ta.qqe(df['close'], length=tech_config.QQE_RSI_PERIOD,
-                                smooth=tech_config.QQE_SLOW_FACTOR, factor=tech_config.QQE_SETTING)
+                                smooth=tech_config.QQE_SLOW_FACTOR, factor=tech_config.QQE_SETTING, append=True)
 
                 """ CREATE DATAFRAME """
-                df = pd.concat([df, df_qqe], axis=1)
+                # df = pd.concat([df, df_qqe], axis=1)
                 df['agg'] = agg
                 master_df = pd.concat([master_df, df], axis=0, ignore_index=False)
 
@@ -205,7 +205,7 @@ def buy_criteria(df, value, trader):
     elif SMALLEST_AGGREGATION == 5:
         df_5m = agg_group.get_group(5)
         df_10m = agg_group.get_group(10)
-        df_15m = agg_group.get_group(15)
+        # df_15m = agg_group.get_group(15)
         df_30m = agg_group.get_group(30)
 
     elif SMALLEST_AGGREGATION == 10:
@@ -227,18 +227,18 @@ def buy_criteria(df, value, trader):
     # df_5m['ll1'] = adr['ll1']
     # df_5m['ll2'] = adr['hl2']
 
-    df_5m['hl1'] = adr['hl1'].reindex(df_5m.index, method='nearest')
-    df_5m['hl2'] = adr['hl2'].reindex(df_5m.index, method='nearest')
-    df_5m['ll1'] = adr['ll1'].reindex(df_5m.index, method='nearest')
-    df_5m['ll2'] = adr['ll2'].reindex(df_5m.index, method='nearest')
-    df_10m['hl1'] = adr['hl1'].reindex(df_10m.index, method='nearest')
-    df_10m['hl2'] = adr['hl2'].reindex(df_10m.index, method='nearest')
-    df_10m['ll1'] = adr['ll1'].reindex(df_10m.index, method='nearest')
-    df_10m['ll2'] = adr['ll2'].reindex(df_10m.index, method='nearest')
-    df_30m['hl1'] = adr['hl1'].reindex(df_30m.index, method='nearest')
-    df_30m['hl2'] = adr['hl2'].reindex(df_30m.index, method='nearest')
-    df_30m['ll1'] = adr['ll1'].reindex(df_30m.index, method='nearest')
-    df_30m['ll2'] = adr['ll2'].reindex(df_30m.index, method='nearest')
+    # df_5m['hl1'] = adr['hl1'].reindex(df_5m.index, method='nearest')
+    # df_5m['hl2'] = adr['hl2'].reindex(df_5m.index, method='nearest')
+    # df_5m['ll1'] = adr['ll1'].reindex(df_5m.index, method='nearest')
+    # df_5m['ll2'] = adr['ll2'].reindex(df_5m.index, method='nearest')
+    # df_10m['hl1'] = adr['hl1'].reindex(df_10m.index, method='nearest')
+    # df_10m['hl2'] = adr['hl2'].reindex(df_10m.index, method='nearest')
+    # df_10m['ll1'] = adr['ll1'].reindex(df_10m.index, method='nearest')
+    # df_10m['ll2'] = adr['ll2'].reindex(df_10m.index, method='nearest')
+    # df_30m['hl1'] = adr['hl1'].reindex(df_30m.index, method='nearest')
+    # df_30m['hl2'] = adr['hl2'].reindex(df_30m.index, method='nearest')
+    # df_30m['ll1'] = adr['ll1'].reindex(df_30m.index, method='nearest')
+    # df_30m['ll2'] = adr['ll2'].reindex(df_30m.index, method='nearest')
 
     current_adr = adr.iloc[-1]
 
