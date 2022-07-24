@@ -17,7 +17,8 @@ def streamPrice(trader):
     queue = list(trader.mongo.queue.find({}))
 
     if len(queue) == 0 and len(open_positions) == 0:
-        print("zero open positions")
+        if config.GIVE_CONTINUOUS_UPDATES:
+            print("zero open positions")
         return
 
     elif len(queue) != 0:
@@ -45,36 +46,32 @@ def streamPrice(trader):
         trail_stop_value = open_position['Trail_Stop_Value']
 
         try:
-            if IS_TESTING:
-                current_price = float(input(f'what is current price for {pre_symbol}'))
-                print(f'self.isTesting is set to {IS_TESTING} - running fake numbers')
+
+            if STREAMPRICE_LINK == "BID":
+                if 'Bid_Price' in open_position.keys():
+                    bid = open_position['Bid_Price']
+                    current_price = bid
+                else:
+                    continue
+
+            elif STREAMPRICE_LINK == "ASK":
+                if 'Ask_Price' in open_position.keys():
+                    ask = open_position['Ask_Price']
+                    current_price = ask
+                else:
+                    continue
+
+            elif STREAMPRICE_LINK == "LAST":
+                if 'Last_Price' in open_position.keys():
+                    last = open_position['Last_Price']
+                    current_price = last
+                else:
+                    continue
 
             else:
-                if STREAMPRICE_LINK == "BID":
-                    if 'Bid_Price' in open_position.keys():
-                        bid = open_position['Bid_Price']
-                        current_price = bid
-                    else:
-                        continue
+                print('error with STREAMPRICE_LINK in env')
 
-                elif STREAMPRICE_LINK == "ASK":
-                    if 'Ask_Price' in open_position.keys():
-                        ask = open_position['Ask_Price']
-                        current_price = ask
-                    else:
-                        continue
-
-                elif STREAMPRICE_LINK == "LAST":
-                    if 'Last_Price' in open_position.keys():
-                        last = open_position['Last_Price']
-                        current_price = last
-                    else:
-                        continue
-
-                else:
-                    print('error with STREAMPRICE_LINK in env')
-
-                trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Current_Price': current_price}}, upsert=True)
+            trader.mongo.open_positions.update_one({"_id": id}, {"$set": {'Current_Price': current_price}}, upsert=True)
 
         except Exception:
 
@@ -93,35 +90,88 @@ def streamPrice(trader):
 
             elif order_type == "OCO":
 
-                if RUN_TRADIER:
-                    for position in open_position['childOrderStrategies']:
-                        if "Takeprofit_Price" in position:
-                            takeprofit_price = position['Takeprofit_Price']
+                if isRunner == "FALSE":
 
-                        else:
-                            stoploss_price = position['Stop_Price']
+                    if RUN_TRADIER:
+                        for position in open_position['childOrderStrategies']:
+                            if "Takeprofit_Price" in position:
+                                takeprofit_price = position['Takeprofit_Price']
 
-                    if current_price >= takeprofit_price:
-                        print('max_price exceeds TakeProfit price, closing position')
+                            else:
+                                stoploss_price = position['Stop_Price']
 
-                    elif current_price <= stoploss_price:
-                        print('current_price exceeds StopLoss price, closing position')
+                        if current_price >= takeprofit_price:
+                            print('max_price exceeds TakeProfit price, closing position')
+
+                        elif current_price <= stoploss_price:
+                            print('current_price exceeds StopLoss price, closing position')
+
+                    else:
+                        takeprofit_price = open_position['childOrderStrategies'][str(0)]['Takeprofit_Price']
+                        stoploss_price = open_position['childOrderStrategies'][str(1)]['Stop_Price']
+
+                        if current_price >= takeprofit_price:
+                            print('max_price exceeds TakeProfit price, closing position')
+                            trader.mongo.open_positions.update_one({"_id": id},
+                                                               {"$set": {'childOrderStrategies.0.Order_Status': 'FILLED'}},
+                                                               upsert=True)
+
+                        elif current_price <= stoploss_price:
+                            print('current_price exceeds StopLoss price, closing position')
+                            trader.mongo.open_positions.update_one({"_id": id},
+                                                                   {"$set": {'childOrderStrategies.1.Order_Status': 'FILLED'}},
+                                                                   upsert=True)
 
                 else:
-                    takeprofit_price = open_position['childOrderStrategies'][str(0)]['Takeprofit_Price']
-                    stoploss_price = open_position['childOrderStrategies'][str(1)]['Stop_Price']
 
-                    if current_price >= takeprofit_price:
-                        print('max_price exceeds TakeProfit price, closing position')
-                        trader.mongo.open_positions.update_one({"_id": id},
-                                                           {"$set": {'childOrderStrategies.0.Order_Status': 'FILLED'}},
-                                                           upsert=True)
+                    if RUN_TRADIER:
+                        for position in open_position['childOrderStrategies']:
+                            if "Takeprofit_Price" in position:
+                                takeprofit_price = position['Takeprofit_Price']
+                                takeprofit_order_id = position['Order_ID']
 
-                    elif current_price <= stoploss_price:
-                        print('current_price exceeds StopLoss price, closing position')
-                        trader.mongo.open_positions.update_one({"_id": id},
-                                                               {"$set": {'childOrderStrategies.1.Order_Status': 'FILLED'}},
-                                                               upsert=True)
+                            else:
+                                stoploss_price = position['Stop_Price']
+                                stop_order_id = position['Order_ID']
+
+                        if current_price >= (takeprofit_price * .9):
+                            print('RUNNER: currentPrice is within 10% of the takeprofitPrice, adjusting stop')
+                            # posit = trader.tradier.get_order('2189779')
+                            trader.tradier.modify_stopprice(takeprofit_order_id, (takeprofit_price*1.1))
+                            trader.tradier.modify_stopprice(stop_order_id, (stoploss_price*1.1))
+
+                        elif current_price > takeprofit_price:
+                            print('RUNNER: current_price exceeds TakeProfit price, closing position')
+
+                        elif current_price <= stoploss_price:
+                            print('RUNNER: current_price exceeds StopLoss price, closing position')
+
+                    else:
+                        takeprofit_price = open_position['childOrderStrategies'][str(0)]['Takeprofit_Price']
+                        takeprofit_order_id = open_position['childOrderStrategies'][str(0)]['Order_ID']
+                        stoploss_price = open_position['childOrderStrategies'][str(1)]['Stop_Price']
+                        stop_order_id = open_position['childOrderStrategies'][str(1)]['Order_ID']
+
+                        if current_price >= (takeprofit_price * .9):
+                            print(f'RUNNER: currentPrice is within 10% of the runnerTakeProfitPrice: '
+                                  f'{takeprofit_price}, adjusting stop')
+                            trader.mongo.open_positions.update_one({"_id": id},
+                                                                   {"$set": {'childOrderStrategies.0.Takeprofit_Price':
+                                                                    (takeprofit_price*1.1)}}, upsert=True)
+                            trader.mongo.open_positions.update_one({"_id": id},
+                                                                   {"$set": {'childOrderStrategies.1.Stop_Price':
+                                                                    (stoploss_price*1.1)}}, upsert=True)
+
+                        elif current_price > takeprofit_price:
+                            trader.mongo.open_positions.update_one({"_id": id},
+                                                                   {"$set": {'childOrderStrategies.0.Order_Status':
+                                                                    'FILLED'}}, upsert=True)
+
+                        elif current_price <= stoploss_price:
+                            print('RUNNER: current_price exceeds StopLoss price, closing position')
+                            trader.mongo.open_positions.update_one({"_id": id},
+                                                                   {"$set": {'childOrderStrategies.1.Order_Status':
+                                                                    'FILLED'}}, upsert=True)
 
             elif order_type == "CUSTOM":
                 if IS_TESTING:
@@ -253,7 +303,7 @@ def streamPrice(trader):
                 print(
                     f'{pre_symbol}   targetPrice {takeprofit_price}   entryPrice {entry_price}   '
                     f'CURRENTPRICE {current_price}   stoplossPrice {stoploss_price}')
-
+    print('\n')
 
             #
             # elif order_type == "TRAIL":

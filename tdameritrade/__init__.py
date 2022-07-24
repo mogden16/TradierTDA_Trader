@@ -334,19 +334,6 @@ class TDAmeritrade:
 
         return self.sendRequest(url, method="DELETE")
 
-    def getOptionChain(self, symbol, option_type, strike_price, exp_date):
-        """ METHOD GETS AN OPTION CHAIN FOR A PARTICULAR OPTION
 
-        Args:
-            symbol ([str]): STOCK SYMBOL
-            option_type ([str]): CALL OR PUT
-            strike_price ([str]): STRIKE PRICE
-            exp_date ([str]): YYYY-MM-DD
 
-        Returns:
-            [json]: STOCK QUOTE
-        """
-
-        url = f"https://api.tdameritrade.com/v1/marketdata/chains?symbol={symbol}&contractType={option_type}&includeQuotes=FALSE&strike={strike_price}&fromDate={exp_date}&toDate={exp_date}"
-
-        return self.sendRequest(url)
+        return df

@@ -11,7 +11,9 @@ IS_TESTING = config.IS_TESTING
 BUY_PRICE = config.BUY_PRICE
 SELL_PRICE = config.SELL_PRICE
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
+RUNNER_TAKE_PROFIT_PERCENTAGE = config.RUNNER_TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
+RUNNER_STOP_LOSS_PERCENTAGE = config.RUNNER_STOP_LOSS_PERCENTAGE
 TRAIL_STOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 RUNNER_FACTOR = config.RUNNER_FACTOR
 RUN_WEBSOCKET = config.RUN_WEBSOCKET
@@ -129,13 +131,13 @@ class OrderBuilder:
                 symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"])
 
             price = float(resp[symbol if asset_type == "EQUITY" else trade_data["Pre_Symbol"]][SELL_PRICE])
-
-            if price > config.MAX_OPTIONPRICE or price < config.MIN_OPTIONPRICE:
-                message = (f'actual price of option: {trade_data["Pre_Symbol"]} is outside of '
-                           f'price setting on config.py')
-                print(message)
-                discord_helpers.send_discord_alert(message)
-                return
+            if not isRunner:
+                if price > config.MAX_OPTIONPRICE or price < config.MIN_OPTIONPRICE:
+                    message = (f'actual price of option: {trade_data["Pre_Symbol"]} is outside of '
+                               f'price setting on config.py --> PRICE: ${price}')
+                    print(message)
+                    discord_helpers.send_discord_alert(message)
+                    return None, None
 
         else:
 
@@ -157,14 +159,15 @@ class OrderBuilder:
                     print(f'error scanning for {symbol}') if asset_type == "EQUITY" else (
                         f'error scanning for {trade_data["Pre_Symbol"]}')
                     self.error += 1
-                    return
-
-                elif price > config.MAX_OPTIONPRICE or price < config.MIN_OPTIONPRICE:
-                    message = (f'actual price of option: {trade_data["Pre_Symbol"]} is outside of '
-                               f'price setting on config.py')
-                    print(message)
-                    discord_helpers.send_discord_alert(message)
                     return None, None
+
+                elif not isRunner:
+                    if price > config.MAX_OPTIONPRICE or price < config.MIN_OPTIONPRICE:
+                        message = (f'actual price of option: {trade_data["Pre_Symbol"]} is outside of '
+                                   f'price setting on config.py --> PRICE: ${price}')
+                        print(message)
+                        discord_helpers.send_discord_alert(message)
+                        return None, None
 
             except Exception:
 
@@ -236,17 +239,20 @@ class OrderBuilder:
         order, obj = self.standardOrder(
             trade_data, strategy_object, direction, OCOorder=True)
 
+        if order is None and obj is None:
+            return None, None
+
         asset_type = "OPTION" if "Pre_Symbol" in trade_data else "EQUITY"
 
         side = trade_data["Side"]
 
-        take_profit_price = round(order["price"] * TAKE_PROFIT_PERCENTAGE, 2) \
-            if order["price"] * TAKE_PROFIT_PERCENTAGE >= 1 \
-            else round(order["price"] * TAKE_PROFIT_PERCENTAGE, 4)
+        if obj['isRunner'] == "FALSE":
+            take_profit_price = round(order["price"] * (1+TAKE_PROFIT_PERCENTAGE), 2)
+            stop_price = round(order["price"] * (1-STOP_LOSS_PERCENTAGE), 2)
 
-        stop_price = round(order["price"] * STOP_LOSS_PERCENTAGE, 2) \
-            if order["price"] * STOP_LOSS_PERCENTAGE >= 1 \
-            else round(order["price"] * STOP_LOSS_PERCENTAGE, 4)
+        else:
+            take_profit_price = round(order["price"] * (1+RUNNER_TAKE_PROFIT_PERCENTAGE), 2)
+            stop_price = round(order["price"] * (1+RUNNER_STOP_LOSS_PERCENTAGE), 2)
 
         # GET THE INVERSE OF THE SIDE
         #####################################

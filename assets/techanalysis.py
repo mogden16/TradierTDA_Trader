@@ -1,15 +1,11 @@
-import traceback
 from datetime import datetime
 import pandas as pd
-from pyti.hull_moving_average import hull_moving_average as hma
 import pandas_ta as ta
+import pytz
+from pyti.hull_moving_average import hull_moving_average as hma
+
 import config
 import tech_config
-import pytz
-import mplfinance as mpf
-import numpy as np
-from discord import discord_helpers
-
 
 TIMEZONE = config.TIMEZONE
 TRADETYPE = tech_config.TRADETYPE.lower()

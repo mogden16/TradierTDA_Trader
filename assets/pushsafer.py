@@ -1,5 +1,5 @@
 import requests
-import os
+
 import config
 
 PUSH_API_KEY = config.PUSH_API_KEY

@@ -1,19 +1,11 @@
 import config
-import traceback
 
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 RUN_TRADIER = config.RUN_TRADIER
 IS_TESTING = config.IS_TESTING
 STREAMPRICE_LINK = config.STREAMPRICE_LINK.upper()
-TAKEPROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
 STOPLOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
 TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
-
-
-def leaverunner(trader, open_position):
-    print('Running leaverunner')
-
-    trader.set_trader(open_position, trade_signal="BUY", isRunner="TRUE")
 
 
 def tradierExtractOCOChildren(spec_order):

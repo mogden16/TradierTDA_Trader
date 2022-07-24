@@ -1,17 +1,16 @@
+import asyncio
+import json
+import time
+import tracemalloc
+
+import certifi
+import pandas as pd
 from tda.auth import easy_client
 from tda.streaming import StreamClient
 
-from assets.helper_functions import selectSleep, modifiedAccountID
-from discord import discord_helpers
-
-import certifi
-import asyncio
-import json
 import config
-import pandas as pd
-import time
-import tracemalloc
 import constants as c
+from assets.helper_functions import selectSleep, modifiedAccountID
 
 tracemalloc.start()
 ca = certifi.where()
@@ -23,6 +22,7 @@ client = easy_client(
 stream_client = StreamClient(client, account_id=config.ACCOUNT_ID)
 
 HEARTBEAT_SETTING = config.HEARTBEAT_SETTING
+IS_TESTING = config.IS_TESTING
 
 class TDWebsocket:
 
@@ -143,6 +143,16 @@ class TDWebsocket:
             for t in workers:
                 t.cancel()
 
+    def testing(self):
+        open_positions = list(self.mongo.open_positions.find({}))
+        for open_position in open_positions:
+            entry_price = open_position['Entry_Price']
+            pre_symbol = open_position['Pre_Symbol']
+            price = float(input(f"What's the current price for {pre_symbol}?: {entry_price}"))
+
+            self.mongo.open_positions.update_one({"Pre_Symbol": pre_symbol}, {"$set": {'Bid_Price': price}}, upsert=False)
+            self.mongo.open_positions.update_one({"Pre_Symbol": pre_symbol}, {"$set": {'Ask_Price': price}}, upsert=False)
+            self.mongo.open_positions.update_one({"Pre_Symbol": pre_symbol}, {"$set": {'Last_Price': price}}, upsert=False)
 
     def runWebsocket(self):
         """ METHOD RUNS TASKS ON WHILE LOOP EVERY 5 - 60 SECONDS DEPENDING.
@@ -156,7 +166,10 @@ class TDWebsocket:
             try:
 
                 # RUN TASKS ####################################################
-                self.main()
+                if not IS_TESTING:
+                    self.main()
+                else:
+                    self.testing()
 
                 ##############################################################
 

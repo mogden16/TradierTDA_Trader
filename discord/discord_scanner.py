@@ -1,7 +1,9 @@
-import requests
-import config
-from datetime import datetime, timedelta, timezone
 import json
+from datetime import datetime, timedelta
+
+import requests
+
+import config
 
 CHANNELID = config.CHANNELID
 DISCORD_AUTH = config.DISCORD_AUTH

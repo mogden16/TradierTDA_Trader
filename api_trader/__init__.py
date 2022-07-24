@@ -80,10 +80,12 @@ class ApiTrader(OrderBuilder):
         OrderBuilder.__init__(self)
 
         time.sleep(.5)  # SLEEPS FOR .5 SO THAT IT CAN STATE RUN_WEBSOCKET FIRST
+
         if RUN_LIVE_TRADER:
             live = 'LIVE'
         else:
             live = 'PAPER'
+
         if RUN_TRADIER:
             str_trader = 'TRADIER'
         else:
@@ -196,7 +198,10 @@ class ApiTrader(OrderBuilder):
 
         self.logger.info(response_msg)
 
-        discord_queue_message_to_push = f":eyes: TradingBOT just Queued \n Side: {side} \n Symbol: {pre_symbol} \n :eyes: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
+        discord_queue_message_to_push = f":eyes: TradingBOT just Queued \n " \
+                                        f"Side: {side} \n " \
+                                        f"Symbol: {pre_symbol} \n " \
+                                        f":eyes: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
         discord_helpers.send_discord_alert(discord_queue_message_to_push)
 
     # STEP TWO
@@ -244,7 +249,8 @@ class ApiTrader(OrderBuilder):
 
                 custom = {
                     "price": queue_order["Entry_Price"] if queue_order["Direction"] == "OPEN POSITION" else queue_order["Exit_Price"],
-                    "shares": queue_order["Qty"]
+                    "shares": queue_order["Qty"],
+                    "isRunner": queue_order['isRunner']
                 }
 
                 # IF RUNNING LIVE TRADER, THEN ASSUME DATA
@@ -418,9 +424,12 @@ class ApiTrader(OrderBuilder):
             collection_insert = self.open_positions.insert_one
 
             discord_message_to_push = f":rocket: TradingBOT just opened \n " \
-                                      f"Side: {side} \n Symbol: {pre_symbol} \n " \
-                                      f"Qty: {shares} \n Price: ${price} \n " \
-                                      f"Strategy: {strategy} \n Asset Type: {asset_type} \n " \
+                                      f"Side: {side} \n " \
+                                      f"Symbol: {pre_symbol} \n " \
+                                      f"Qty: {shares} \n " \
+                                      f"Price: ${price} \n " \
+                                      f"Strategy: {strategy} \n " \
+                                      f"isRunner: {obj['isRunner']} \n " \
                                       f"Date: {getDatetime()} \n " \
                                       f":rocket: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
 
@@ -437,7 +446,7 @@ class ApiTrader(OrderBuilder):
             position = self.open_positions.find_one(
                 {"Trader": self.user["Name"], "Pre_Symbol": pre_symbol})
 
-            if position == None:
+            if position is None:
                 return
 
             obj["Qty"] = position["Qty"]
@@ -458,12 +467,15 @@ class ApiTrader(OrderBuilder):
             collection_insert = self.closed_positions.insert_one
 
             discord_message_to_push = f":closed_book: TradingBOT just closed \n " \
-                                      f"Side: {side} \n Symbol: {pre_symbol} \n " \
+                                      f"Side: {side} \n " \
+                                      f"Symbol: {pre_symbol} \n " \
                                       f"Qty: {position['Qty']} \n " \
                                       f"Entry Price: ${position['Entry_Price']} \n " \
                                       f"Entry Date: {position['Entry_Date']} \n " \
-                                      f"Exit Price: ${price} \n Exit Date: {getDatetime()} \n " \
-                                      f"Strategy: {strategy} \n Asset Type: {asset_type} \n " \
+                                      f"Exit Price: ${price} \n " \
+                                      f"Exit Date: {getDatetime()} \n " \
+                                      f"Strategy: {strategy} \n " \
+                                      f"isRunner: {obj['isRunner']} \n " \
                                       f":closed_book: Account Position: " \
                                       f"{'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
 

@@ -15,12 +15,16 @@ from assets.helper_functions import getDatetime, selectSleep, modifiedAccountID
 from discord import discord_helpers
 
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
+RUNNER_TAKE_PROFIT_PERCENTAGE = config.RUNNER_TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
+RUNNER_STOP_LOSS_PERCENTAGE = config.RUNNER_STOP_LOSS_PERCENTAGE
 TRAILSTOP_PERCENTAGE = config.TRAIL_STOP_PERCENTAGE
 RUN_TRADIER = config.RUN_TRADIER
 MAX_QUEUE_LENGTH = config.MAX_QUEUE_LENGTH
 RUN_LIVE_TRADER = config.RUN_LIVE_TRADER
 SELL_PRICE = config.SELL_PRICE
+ADD_RUNNING_ORDERS = config.ADD_RUNNING_ORDERS
+IS_TESTING = config.IS_TESTING
 
 
 class Tasks:
@@ -72,7 +76,7 @@ class Tasks:
 
         return json_response
 
-    def set_closeOrder(self, queue_order, spec_order, data_integrity="Reliable"):
+    def set_closeOrder(self, queue_order, spec_order, order, data_integrity="Reliable"):
         """ METHOD PUSHES ORDER TO EITHER OPEN POSITIONS OR CLOSED POSITIONS COLLECTION IN MONGODB.
             IF BUY ORDER, THEN PUSHES TO OPEN POSITIONS.
             IF SELL ORDER, THEN PUSHES TO CLOSED POSITIONS.
@@ -173,10 +177,6 @@ class Tasks:
 
             obj["Exit_Date"] = getDatetime()
 
-            # exit_price = round(price * position["Qty"], 2)
-            #
-            # entry_price = round(position["Price"] * position["Qty"], 2)
-
             collection_insert = self.mongo.closed_positions.insert_one
 
             discord_message_to_push = f":closed_book: TradingBOT just closed \n Side: {side} \n Symbol: {pre_symbol} \n Qty: {position['Qty']} \n Entry Price: ${position['Entry_Price']} \n Entry Date: {position['Entry_Date']} \n Exit Price: ${price} \n Exit Date: {getDatetime()} \n Strategy: {strategy} \n Asset Type: {asset_type} \n :closed_book: Account Position: {'Live Trade' if RUN_LIVE_TRADER else 'Paper Trade'}"
@@ -240,7 +240,7 @@ class Tasks:
         discord_helpers.send_discord_alert(discord_message_to_push)
 
     @exception_handler
-    def checkOCOtriggers(self):
+    def checktradierOCOtriggers(self):
         """ Checks OCO triggers (stop loss/ take profit) to see if either one has filled. If so, then close position in mongo like normal.
 
         """
@@ -253,10 +253,11 @@ class Tasks:
                 childOrderStrategies = position["childOrderStrategies"]
 
             except:
-
                 continue
+
             x = 0
             trulycanceled = 0
+
             for order in childOrderStrategies:
 
                 if position['Account_ID'] == self.tradier.account_id:
@@ -279,11 +280,11 @@ class Tasks:
 
                     if position['Account_ID'] == self.tradier.account_id:
 
-                        self.set_closeOrder(position, spec_order['order'])
+                        self.set_closeOrder(position, spec_order['order'], order)
 
                     elif RUN_LIVE_TRADER and position['Account_ID'] == self.account_id:
 
-                        self.set_closeOrder(position, spec_order)
+                        self.set_closeOrder(position, spec_order, order)
 
                     else:
 
@@ -301,7 +302,126 @@ class Tasks:
                             'direction': "CLOSE POSITION"
                         }
 
-                        self.set_closeOrder(position, spec_order)
+                        self.set_closeOrder(position, spec_order, order)
+
+                    """ SEND OFF YOUR RUNNER!! """
+                    if ADD_RUNNING_ORDERS:
+                        if "Takeprofit_Price" in order and new_status.upper() == "FILLED":
+                            self.set_trader(position, trade_signal="BUY", trade_type="LIMIT", isRunner=True)
+
+                elif new_status.upper() == "CANCELED" or new_status.upper() == "REJECTED":
+
+                    trulycanceled += 1
+
+                    if trulycanceled == 2:
+
+                        other = {
+                            "Symbol": position["Symbol"],
+                            "Order_Type": position["Order_Type"],
+                            "Order_Status": new_status,
+                            "Strategy": position["Strategy"],
+                            "Trader": self.user["Name"],
+                            "Date": getDatetime(),
+                            "Account_ID": self.tradier.account_id if RUN_TRADIER else self.account_id
+                        }
+
+                        self.set_closeOrder(position, spec_order['order'], order)
+
+                        self.mongo.rejected.insert_one(
+                            other) if new_status == "REJECTED" else self.mongo.canceled.insert_one(other)
+
+                        self.logger.info(
+                            f"{new_status.upper()} ORDER For {position['Symbol']} - TRADER: {self.user['Name']} - ACCOUNT ID: {modifiedAccountID(self.account_id)}")
+
+                    else:
+
+                        continue
+
+                else:
+
+                    if RUN_TRADIER:
+                        self.mongo.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"], "Strategy": position["Strategy"]},
+                            {"$set": {f"childOrderStrategies.{x}.Order_Status": new_status}})
+
+                    else:
+                        self.mongo.open_positions.update_one({"Trader": self.user["Name"], "Symbol": position["Symbol"],
+                                                        "Strategy": position["Strategy"]},
+                                                       {"$set": {f"childOrderStrategies.{order}.Order_Status": new_status}})
+
+
+
+
+                x += 1
+
+    @exception_handler
+    def checkOCOtriggers(self):
+        """ Checks OCO triggers (stop loss/ take profit) to see if either one has filled. If so, then close position in mongo like normal.
+
+        """
+        open_positions = self.mongo.open_positions.find(
+            {"Trader": self.user["Name"]})
+
+        for position in open_positions:
+            try:
+
+                childOrderStrategies = position["childOrderStrategies"]
+
+            except:
+
+                continue
+            x = 0
+            trulycanceled = 0
+
+            for order, key in childOrderStrategies.items():
+
+                if position['Account_ID'] == self.tradier.account_id:
+
+                    spec_order = self.getTradierorder(order['Order_ID'])
+
+                    new_status = spec_order['order']["status"]
+
+                elif RUN_LIVE_TRADER and position['Account_ID'] == self.account_id:
+                    for td_trader in self.traders.values():
+                        spec_order = td_trader.tdameritrade.getSpecificOrder(order['Order_ID'])
+
+                    new_status = spec_order['order']["status"]
+
+                else:
+
+                    new_status = position['childOrderStrategies'][order]["Order_Status"]
+
+                if new_status.upper() == "FILLED" or new_status.upper() == "EXPIRED":
+
+                    if position['Account_ID'] == self.tradier.account_id:
+
+                        self.set_closeOrder(position, spec_order['order'], order)
+
+                    elif RUN_LIVE_TRADER and position['Account_ID'] == self.account_id:
+
+                        self.set_closeOrder(position, spec_order, order)
+
+                    else:
+
+                        if position['childOrderStrategies'][order]['Exit_Type'] == "STOP LOSS":
+                            for td_trader in self.traders.values():
+                                price = td_trader.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']]['bidPrice']
+
+                        else:
+                            for td_trader in self.traders.values():
+                                price = td_trader.tdameritrade.getQuote(position['Pre_Symbol'])[position['Pre_Symbol']][SELL_PRICE]
+
+                        spec_order = {
+                            'price': price,
+                            'side': "SELL_TO_CLOSE",
+                            'direction': "CLOSE POSITION"
+                        }
+
+                        self.set_closeOrder(position, spec_order, order)
+
+                    """ SEND OFF YOUR RUNNER!! """
+                    if ADD_RUNNING_ORDERS:
+                        if key['Exit_Type'] == "TAKE PROFIT" and key['Order_Status'] == "FILLED":
+                            self.set_trader(position, trade_signal="BUY", trade_type="LIMIT", isRunner=True)
 
                 elif new_status.upper() == "CANCELED" or new_status.upper() == "REJECTED":
 
@@ -351,6 +471,8 @@ class Tasks:
             "childOrderStrategies": {}
         }
 
+        isRunner = spec_order['isRunner']
+
         if RUN_LIVE_TRADER:
 
             childOrderStrategies = spec_order["childOrderStrategies"][0]["childOrderStrategies"]
@@ -365,7 +487,8 @@ class Tasks:
                 }
 
         else:
-
+            takeProfitPrice = TAKE_PROFIT_PERCENTAGE if isRunner == "FALSE" else RUNNER_TAKE_PROFIT_PERCENTAGE
+            stopLossPrice = STOP_LOSS_PERCENTAGE if isRunner == "FALSE" else RUNNER_STOP_LOSS_PERCENTAGE
             for i in range(0, 2):
 
                 oco_children['childOrderStrategies'][str(i)] = {
@@ -376,12 +499,12 @@ class Tasks:
                 }
 
                 if i == 0:
-                    oco_children['childOrderStrategies'][str(i)]['Takeprofit_Price'] = \
-                        round(spec_order["price"] * (1+TAKE_PROFIT_PERCENTAGE), 2)
+                        oco_children['childOrderStrategies'][str(i)]['Takeprofit_Price'] = \
+                            round(spec_order["price"] * (1+takeProfitPrice), 2)
 
                 else:
                     oco_children['childOrderStrategies'][str(i)]['Stop_Price'] = \
-                        round(spec_order["price"] * (1-STOP_LOSS_PERCENTAGE), 2)
+                        round(spec_order["price"] * (1-stopLossPrice), 2)
 
         return oco_children
 
@@ -490,7 +613,10 @@ class Tasks:
             try:
 
                 # RUN TASKS ####################################################
-                self.checkOCOtriggers()
+                if RUN_TRADIER:
+                    self.checktradierOCOtriggers()
+                else:
+                    self.checkOCOtriggers()
                 self.killQueueOrder()
 
                 ##############################################################

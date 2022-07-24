@@ -8,7 +8,6 @@ import logging
 from pathlib import Path
 import config
 from assets.exception_handler import exception_handler
-from assets.helper_functions import selectSleep
 from assets.timeformatter import Formatter
 from assets.multifilehandler import MultiFileHandler
 
@@ -161,15 +160,18 @@ class AlertScanner:
         else:
             max_loc = (0, 0)
 
-        if direction == 99999:
-            systemStatus = "ERROR"
-        else:
-            systemStatus = "RUNNING"
+        # if direction == 99999:
+        #     systemStatus = "ERROR"
+        # else:
+        #     systemStatus = "RUNNING"
+        #
+        # if systemStatus == "RUNNING":
+        #     sendAlert = True
+        # else:
+        #     sendAlert = False
 
-        if self.initiation and systemStatus == "RUNNING":
-            sendAlert = True
-        else:
-            sendAlert = False
+        systemStatus = "RUNNING"
+        sendAlert = True
 
         scr = scr.copy()
         for (x, y) in zip(allLongArrows[1], allLongArrows[0]):
@@ -193,12 +195,10 @@ class AlertScanner:
 
         cv2.imshow('Screen Shot', scr)
 
-        if sendAlert and self.initiation:
-            print(f"\n{current_time} --> Status : {systemStatus}, prev_direction={switcher.get(self.prev_direction)}, direction={switcher.get(direction)},  sendAlert= {sendAlert}")
+        if sendAlert:
+            if config.GIVE_CONTINUOUS_UPDATES:
+                print(f"\n{current_time} --> Status : {systemStatus}, prev_direction={switcher.get(self.prev_direction)}, direction={switcher.get(direction)},  sendAlert= {sendAlert}")
             trade_signal = switcher.get(direction)
-
-        else:
-            self.initiation = True
 
         self.prev_direction = direction
         self.prev_systemStatus = systemStatus

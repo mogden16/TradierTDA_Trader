@@ -1,10 +1,9 @@
 # imports
 import time
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from tqdm import tqdm
 import certifi
-import json
 import traceback
 import pytz
 import polygon
@@ -12,7 +11,6 @@ import pandas as pd
 import shutil
 import glob
 import config
-import constants as c
 import numpy as np
 
 from discord import discord_scanner, discord_helpers

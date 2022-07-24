@@ -1,13 +1,16 @@
-import config
 import polygon
+
+import config
+from discord import discord_helpers
 from assets.helper_functions import getDatetime
-from tdameritrade import TDAmeritrade
 
 RUNNER_FACTOR = config.RUNNER_FACTOR
 IS_TESTING = config.IS_TESTING
 
 TAKE_PROFIT_PERCENTAGE = config.TAKE_PROFIT_PERCENTAGE
 STOP_LOSS_PERCENTAGE = config.STOP_LOSS_PERCENTAGE
+RUNNER_TAKE_PROFIT_PERCENTAGE = config.RUNNER_TAKE_PROFIT_PERCENTAGE
+RUNNER_STOP_LOSS_PERCENTAGE = config.RUNNER_STOP_LOSS_PERCENTAGE
 GET_PRICE_FROM_TD = config.GET_PRICE_FROM_TD
 
 class tradierOrderBuilder:
@@ -118,6 +121,14 @@ class tradierOrderBuilder:
 
                 price = 1
 
+            if not isRunner:
+                if price > config.MAX_OPTIONPRICE or price < config.MIN_OPTIONPRICE:
+                    message = (f'actual price of option: {trade_data["Pre_Symbol"]} is outside of '
+                               f'price setting on config.py --> PRICE: ${price}')
+                    print(message)
+                    discord_helpers.send_discord_alert(message)
+                    return None, None
+
             self.order['price'] = str(price)
 
             self.obj['Price'] = float(price)
@@ -168,17 +179,21 @@ class tradierOrderBuilder:
 
         else:
             print(f'otoco trades cannot be done with equtities')
-            return
+            return None, None
 
         isRunner = trade_data['isRunner']
 
         if isRunner == "TRUE":
 
             runnerFactor = RUNNER_FACTOR
+            takeprofit_pct = RUNNER_TAKE_PROFIT_PERCENTAGE
+            stoploss_pct = RUNNER_STOP_LOSS_PERCENTAGE
 
         else:
 
             runnerFactor = 1
+            takeprofit_pct = TAKE_PROFIT_PERCENTAGE
+            stoploss_pct = STOP_LOSS_PERCENTAGE
 
         side = trade_data["Side"]
 
@@ -220,6 +235,13 @@ class tradierOrderBuilder:
 
                 price = 1
 
+            if price > config.MAX_OPTIONPRICE or price < config.MIN_OPTIONPRICE:
+                message = (f'actual price of option: {trade_data["Pre_Symbol"]} is outside of '
+                           f'price setting on config.py --> PRICE: ${price}')
+                print(message)
+                discord_helpers.send_discord_alert(message)
+                return None, None
+
             tradier_entry_price = str(price)
 
             entry_price = float(price)
@@ -245,7 +267,7 @@ class tradierOrderBuilder:
         self.order['type[1]'] = 'limit'
         self.order['option_symbol[1]'] = trading_symbol
         self.order['side[1]'] = 'sell_to_close'
-        self.order['price[1]'] = str(round(entry_price * (1 + TAKE_PROFIT_PERCENTAGE),2))
+        self.order['price[1]'] = str(round(entry_price * (1 + takeprofit_pct), 2))
 
         # stoploss order
         self.order['symbol[2]'] = symbol
@@ -253,7 +275,7 @@ class tradierOrderBuilder:
         self.order['type[2]'] = 'stop'
         self.order['option_symbol[2]'] = trading_symbol
         self.order['side[2]'] = 'sell_to_close'
-        self.order['stop[2]'] = str(round(entry_price * (1 - STOP_LOSS_PERCENTAGE),2))
+        self.order['stop[2]'] = str(round(entry_price * (1 - stoploss_pct), 2))
 
         self.obj['Strategy'] = strategy
         self.obj['Symbol'] = symbol

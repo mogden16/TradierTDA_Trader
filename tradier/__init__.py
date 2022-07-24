@@ -165,14 +165,17 @@ class TradierTrader(tradierOrderBuilder):
         path = f'{self.endpoint}{api_path.replace("{account_id}",str(self.account_id)).replace("{id}",str(order_id))}'
 
         response = requests.put(path,
-                                data={'stop': str(price)},
+                                data={'stop': str(round(price,2))},
                                 headers=self.headers
                                 )
-        if response.status_code not in [200, 201]:
-            print(f'bad response {order_id}')
-            return
 
         json_response = response.json()
+
+        if response.status_code not in [200, 201]:
+            print(f'bad response {order_id}: \n'
+                  f'{json_response}')
+            return
+
         return json_response
 
     @exception_handler
@@ -247,13 +250,15 @@ class TradierTrader(tradierOrderBuilder):
         else:
             print('your order_type in Mongo is incorrect')
 
-        if order == None and obj == None:
+        if order is None and obj is None:
 
             return
 
         # PLACE ORDER ################################################
-
-        resp, status_code = self.place_order(order)
+        try:
+            resp, status_code = self.place_order(order)
+        except Exception as e:
+            print(e)
 
         if 'errors' in resp.keys() or 'error' in resp.keys():
             message = f'error in order for {pre_symbol}: {resp["errors"]["error"]}'
@@ -387,6 +392,7 @@ class TradierTrader(tradierOrderBuilder):
                     self.pushOrder(queue_order, spec_order)
 
                 elif IS_TESTING:
+
                     if spec_order["class"] == "otoco":
                         queue_order = {**queue_order, **tradierExtractOCOChildren(spec_order)}
 
@@ -546,9 +552,9 @@ class TradierTrader(tradierOrderBuilder):
 
             obj["Exit_Date"] = getDatetime()
 
-            # exit_price = round(price * position["Qty"], 2)
-            #
-            # entry_price = round(position["Price"] * position["Qty"], 2)
+            take_profit_price = position['childOrderStrategies']['Takeprofit_Price']
+
+            # if price >= take_profit_price:
 
             collection_insert = self.mongo.closed_positions.insert_one
 
