@@ -7,6 +7,7 @@ from pyti.exponential_moving_average import exponential_moving_average as ema
 
 import config
 import tech_config
+import mplfinance as mpf
 
 TA_TYPE = config.TA_TYPE.upper()
 TIMEZONE = config.TIMEZONE
@@ -22,6 +23,7 @@ RSIPAINTTYPE = tech_config.RSIPAINTTYPE.lower()
 RSILENGTH = tech_config.RSILENGTH
 RSIAVERAGETYPE = tech_config.RSIAVERAGETYPE.lower()
 SMALLEST_AGGREGATION = tech_config.SMALLEST_AGGREGATION
+SHOW_TA_CHARTS= config.SHOW_TA_CHARTS
 
 RSISUPEROVERSOLD = tech_config.RSISUPEROVERSOLD
 RSIOVERSOLD = tech_config.RSIOVERSOLD
@@ -235,23 +237,24 @@ def buy_criteria(df, value, trader):
 
     adr = calculate_averageDailyRange(value, trader)
 
-    # df_5m['hl1'] = adr['hl1']
-    # df_5m['hl2'] = adr['hl2']
-    # df_5m['ll1'] = adr['ll1']
-    # df_5m['ll2'] = adr['hl2']
+    if SHOW_TA_CHARTS:
+        df_5m['hl1'] = adr['hl1']
+        df_5m['hl2'] = adr['hl2']
+        df_5m['ll1'] = adr['ll1']
+        df_5m['ll2'] = adr['hl2']
 
-    # df_5m['hl1'] = adr['hl1'].reindex(df_5m.index, method='nearest')
-    # df_5m['hl2'] = adr['hl2'].reindex(df_5m.index, method='nearest')
-    # df_5m['ll1'] = adr['ll1'].reindex(df_5m.index, method='nearest')
-    # df_5m['ll2'] = adr['ll2'].reindex(df_5m.index, method='nearest')
-    # df_10m['hl1'] = adr['hl1'].reindex(df_10m.index, method='nearest')
-    # df_10m['hl2'] = adr['hl2'].reindex(df_10m.index, method='nearest')
-    # df_10m['ll1'] = adr['ll1'].reindex(df_10m.index, method='nearest')
-    # df_10m['ll2'] = adr['ll2'].reindex(df_10m.index, method='nearest')
-    # df_30m['hl1'] = adr['hl1'].reindex(df_30m.index, method='nearest')
-    # df_30m['hl2'] = adr['hl2'].reindex(df_30m.index, method='nearest')
-    # df_30m['ll1'] = adr['ll1'].reindex(df_30m.index, method='nearest')
-    # df_30m['ll2'] = adr['ll2'].reindex(df_30m.index, method='nearest')
+        df_5m['hl1'] = adr['hl1'].reindex(df_5m.index, method='nearest')
+        df_5m['hl2'] = adr['hl2'].reindex(df_5m.index, method='nearest')
+        df_5m['ll1'] = adr['ll1'].reindex(df_5m.index, method='nearest')
+        df_5m['ll2'] = adr['ll2'].reindex(df_5m.index, method='nearest')
+        df_10m['hl1'] = adr['hl1'].reindex(df_10m.index, method='nearest')
+        df_10m['hl2'] = adr['hl2'].reindex(df_10m.index, method='nearest')
+        df_10m['ll1'] = adr['ll1'].reindex(df_10m.index, method='nearest')
+        df_10m['ll2'] = adr['ll2'].reindex(df_10m.index, method='nearest')
+        df_30m['hl1'] = adr['hl1'].reindex(df_30m.index, method='nearest')
+        df_30m['hl2'] = adr['hl2'].reindex(df_30m.index, method='nearest')
+        df_30m['ll1'] = adr['ll1'].reindex(df_30m.index, method='nearest')
+        df_30m['ll2'] = adr['ll2'].reindex(df_30m.index, method='nearest')
 
     current_adr = adr.iloc[-1]
 
@@ -263,71 +266,109 @@ def buy_criteria(df, value, trader):
     df_10m = df_10m.iloc[-150:]
     df_30m = df_30m.iloc[-150:]
 
+    if SHOW_TA_CHARTS:
+        if TA_TYPE == "QQE":
+            apd = [
+                mpf.make_addplot(df_5m[f'{pRsiMa}'],
+                                 type='line', color='green', panel=1),
+                mpf.make_addplot(df_5m[f'{pFastAtrRsiTL}'],
+                                 type='line', color='grey', panel=1),
+                mpf.make_addplot(df_5m[f'hma_fast'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_5m[f'hma_slow'],
+                                 type='line', color='grey', panel=0),
+                mpf.make_addplot(df_5m[f'hl1'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_5m[f'hl2'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_5m[f'll1'],
+                                 type='line', color='red', panel=0),
+                mpf.make_addplot(df_5m[f'll2'],
+                                 type='line', color='red', panel=0),
+                ]
+            ape = [
+                mpf.make_addplot(df_10m[f'{pRsiMa}'],
+                                 type='line', color='green', panel=1),
+                mpf.make_addplot(df_10m[f'{pFastAtrRsiTL}'],
+                                 type='line', color='grey', panel=1),
+                mpf.make_addplot(df_10m[f'hma_fast'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_10m[f'hma_slow'],
+                                 type='line', color='grey', panel=0),
+                mpf.make_addplot(df_10m[f'hl1'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_10m[f'hl2'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_10m[f'll1'],
+                                 type='line', color='red', panel=0),
+                mpf.make_addplot(df_10m[f'll2'],
+                                 type='line', color='red', panel=0)
+            ]
+            apf = [
+                mpf.make_addplot(df_30m[f'{pRsiMa}'],
+                                 type='line', color='green', panel=1),
+                mpf.make_addplot(df_30m[f'{pFastAtrRsiTL}'],
+                                 type='line', color='grey', panel=1),
+                mpf.make_addplot(df_30m[f'hma_fast'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_30m[f'hma_slow'],
+                                 type='line', color='grey', panel=0),
+                mpf.make_addplot(df_30m[f'hl1'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_30m[f'hl2'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_30m[f'll1'],
+                                 type='line', color='red', panel=0),
+                mpf.make_addplot(df_30m[f'll2'],
+                                 type='line', color='red', panel=0)
+            ]
 
-    # apd = [
-    #     mpf.make_addplot(df_5m[f'{pRsiMa}'],
-    #                      type='line', color='green', panel=1),
-    #     mpf.make_addplot(df_5m[f'{pFastAtrRsiTL}'],
-    #                      type='line', color='grey', panel=1),
-    #     mpf.make_addplot(df_5m[f'hma_fast'],
-    #                      type='line', color='green', panel=0),
-    #     mpf.make_addplot(df_5m[f'hma_slow'],
-    #                      type='line', color='grey', panel=0),
-    #     mpf.make_addplot(df_5m[f'hl1'],
-    #                      type='line', color='green', panel=0),
-    #     mpf.make_addplot(df_5m[f'hl2'],
-    #                      type='line', color='green', panel=0),
-    #     mpf.make_addplot(df_5m[f'll1'],
-    #                      type='line', color='red', panel=0),
-    #     mpf.make_addplot(df_5m[f'll2'],
-    #                      type='line', color='red', panel=0),
-    #     ]
-    # ape = [
-    #     mpf.make_addplot(df_10m[f'{pRsiMa}'],
-    #                      type='line', color='green', panel=1),
-    #     mpf.make_addplot(df_10m[f'{pFastAtrRsiTL}'],
-    #                      type='line', color='grey', panel=1),
-    #     mpf.make_addplot(df_10m[f'hma_fast'],
-    #                      type='line', color='green', panel=0),
-    #     mpf.make_addplot(df_10m[f'hma_slow'],
-    #                      type='line', color='grey', panel=0),
-    #     mpf.make_addplot(df_10m[f'hl1'],
-    #                      type='line', color='green', panel=0),
-    #     mpf.make_addplot(df_10m[f'hl2'],
-    #                      type='line', color='green', panel=0),
-    #     mpf.make_addplot(df_10m[f'll1'],
-    #                      type='line', color='red', panel=0),
-    #     mpf.make_addplot(df_10m[f'll2'],
-    #                      type='line', color='red', panel=0)
-    # ]
-    # apf = [
-    #     mpf.make_addplot(df_30m[f'{pRsiMa}'],
-    #                      type='line', color='green', panel=1),
-    #     mpf.make_addplot(df_30m[f'{pFastAtrRsiTL}'],
-    #                      type='line', color='grey', panel=1),
-    #     mpf.make_addplot(df_30m[f'hma_fast'],
-    #                      type='line', color='green', panel=0),
-    #     mpf.make_addplot(df_30m[f'hma_slow'],
-    #                      type='line', color='grey', panel=0),
-    #     mpf.make_addplot(df_30m[f'hl1'],
-    #                      type='line', color='green', panel=0),
-    #     mpf.make_addplot(df_30m[f'hl2'],
-    #                      type='line', color='green', panel=0),
-    #     mpf.make_addplot(df_30m[f'll1'],
-    #                      type='line', color='red', panel=0),
-    #     mpf.make_addplot(df_30m[f'll2'],
-    #                      type='line', color='red', panel=0)
-    # ]
-    #
-    # mpf.plot(
-    #     df_5m, type='candle', volume=True, title=f'{symbol}_5', addplot=apd, main_panel=0, volume_panel=2, block=False
-    # )
-    # mpf.plot(
-    #     df_10m,type='candle', volume=True, title=f'{symbol}_10', addplot=ape, main_panel=0, volume_panel=2, block=False
-    # )
-    # mpf.plot(
-    #     df_30m, type='candle', volume=True, title=f'{symbol}_30', addplot=apf, main_panel=0, volume_panel=2, block=False
-    # )
+            mpf.plot(
+                df_5m, type='candle', volume=True, title=f'{symbol}_5', addplot=apd, main_panel=0, volume_panel=2
+            )
+            mpf.plot(
+                df_10m,type='candle', volume=True, title=f'{symbol}_10', addplot=ape, main_panel=0, volume_panel=2
+            )
+            mpf.plot(
+                df_30m, type='candle', volume=True, title=f'{symbol}_30', addplot=apf, main_panel=0, volume_panel=2
+            )
+
+        elif TA_TYPE == "EMA":
+            apd = [
+                mpf.make_addplot(df_5m[f'ema_5m_fast'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_5m[f'ema_5m_slow'],
+                                 type='line', color='grey', panel=0),
+                mpf.make_addplot(df_5m[f'hl1'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_5m[f'hl2'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_5m[f'll1'],
+                                 type='line', color='red', panel=0),
+                mpf.make_addplot(df_5m[f'll2'],
+                                 type='line', color='red', panel=0),
+            ]
+            apf = [
+                mpf.make_addplot(df_30m[f'ema_30m_fast'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_30m[f'ema_30m_slow'],
+                                 type='line', color='grey', panel=0),
+                mpf.make_addplot(df_30m[f'hl1'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_30m[f'hl2'],
+                                 type='line', color='green', panel=0),
+                mpf.make_addplot(df_30m[f'll1'],
+                                 type='line', color='red', panel=0),
+                mpf.make_addplot(df_30m[f'll2'],
+                                 type='line', color='red', panel=0)
+            ]
+
+            mpf.plot(
+                df_5m, type='candle', volume=True, title=f'{symbol}_5', addplot=apd, main_panel=0, volume_panel=1
+            )
+            mpf.plot(
+                df_30m, type='candle', volume=True, title=f'{symbol}_30', addplot=apf, main_panel=0, volume_panel=1
+            )
 
     """ RUN STRATEGY """
 
