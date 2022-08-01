@@ -370,7 +370,9 @@ def buy_criteria(df, value, trader):
             elif (last_5m_bar['ema_5m_fast'] > last_5m_bar['ema_5m_slow']) and \
                     (twolast_5m_bar['ema_5m_fast'] < twolast_5m_bar['ema_5m_slow']) and \
                     (current_30m_bar['ema_30m_fast'] > current_30m_bar['ema_30m_slow']):
-                message = f"Buying CALL for {pre_symbol} because QQE Cross UP & Current 30m QQE is above 45"
+                message = f"Buying CALL for {pre_symbol} because {tech_config.EMA_5M_FAST}EMA just crossed above " \
+                          f"{tech_config.EMA_5M_SLOW}EMA & Current large TF {tech_config.EMA_30M_FAST}EMA is greater than " \
+                          f"{tech_config.EMA_30M_SLOW}EMA"
                 # discord_helpers.send_discord_alert(message)
                 print(message)
                 return True
@@ -406,7 +408,9 @@ def buy_criteria(df, value, trader):
             elif (last_5m_bar['ema_5m_fast'] < last_5m_bar['ema_5m_slow']) and \
                     (twolast_5m_bar['ema_5m_fast'] > twolast_5m_bar['ema_5m_slow']) and \
                     (current_30m_bar['ema_30m_fast'] < current_30m_bar['ema_30m_slow']):
-                message = f"Buying CALL for {pre_symbol} because QQE Cross UP & Current 30m QQE is above 45"
+                message = f"Buying PUT for {pre_symbol} because {tech_config.EMA_5M_FAST}EMA just crossed below " \
+                          f"{tech_config.EMA_5M_SLOW}EMA & Current large TF {tech_config.EMA_30M_FAST}EMA is less than " \
+                          f"{tech_config.EMA_30M_SLOW}EMA"
                 # discord_helpers.send_discord_alert(message)
                 print(message)
                 return True

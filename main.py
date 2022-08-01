@@ -179,10 +179,11 @@ class Main(Tasks, TDWebsocket):
         alerts = []
 
         for symbol in TICKER_LIST:
-            for option_type in ['CALL, PUT']:
+            for option_type in ['CALL', 'PUT']:
                 alert = {
                     'Symbol': symbol,
                     'Option_Type': option_type,
+                    "Strategy": "LIST"
                 }
                 option_exp_date = helper_functions.find_option_expDate(live_trader, TRADE_SYMBOL)
                 alert['Exp_Date'] = option_exp_date
@@ -214,8 +215,10 @@ class Main(Tasks, TDWebsocket):
                         trade_alerts.append(alert)
 
         if RUN_LIST:
-            list_alerts = self.get_list_alerts()
-            trade_alerts.append(alert)
+            for live_trader in self.traders.values():
+                list_alerts = self.get_list_alerts(live_trader)
+                for alert in list_alerts:
+                    trade_alerts.append(alert)
 
         return trade_alerts
 
@@ -237,6 +240,20 @@ class Main(Tasks, TDWebsocket):
                 for api_trader in self.traders.values():
                     df = td_helpers.getOptionChain(api_trader, alert['Symbol'], alert['Option_Type'], alert['Exp_Date'])
                     df1 = td_helpers.getSingleOption(df)
+
+                if alert['Strategy'] == "LIST":
+                    alert = {
+                        "Symbol": alert['Symbol'],
+                        "Side": "BUY_TO_OPEN",
+                        "Pre_Symbol": df1['pre_symbol'],
+                        "Exp_Date": alert['Exp_Date'],
+                        "Strike_Price": str(df1['strikePrice']),
+                        "Option_Type": alert['Option_Type'],
+                        "Strategy": alert['Strategy'],
+                        "Asset_Type": "OPTION",
+                        "HedgeAlert": "FALSE",
+                        "Entry_Date": datetime.now()
+                    }
 
                 if df1 is None:
                     small_df = td_helpers.getPotentialDF(df)
@@ -524,7 +541,7 @@ class Main(Tasks, TDWebsocket):
                 if order in c.OPTIONLIST:
                     c.OPTIONLIST.remove(order)
 
-            if config.RUN_TA and (RUN_GMAIL or RUN_DISCORD):
+            if config.RUN_TA and (RUN_GMAIL or RUN_DISCORD or RUN_LIST):
                 """ SCAN EVERY 5m - ("XX:00:XX" or "XX:05:XX) """
                 if current_time[-4] == "0" or current_time[-4] == "5":
 
