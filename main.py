@@ -224,8 +224,9 @@ class Main(Tasks, TDWebsocket):
 
     def OPTIONLIST_find_one(self, alert):
         symbol = alert['Symbol']
+        option_type = alert['Option_Type']
 
-        position = next((x for x in c.OPTIONLIST if x["Symbol"] == symbol), None)
+        position = next((x for x in c.OPTIONLIST if x["Symbol"] == symbol and x["Option_Type"] == option_type), None)
 
         if position is None:
             return False
@@ -308,7 +309,7 @@ class Main(Tasks, TDWebsocket):
                             else:
                                 position = self.OPTIONLIST_find_one(alert)
                                 if position is True:
-                                    c.DONTTRADELIST(alert)
+                                    c.DONTTRADELIST.append(alert)
                                 else:
                                     c.OPTIONLIST.append(alert)
 
