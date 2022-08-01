@@ -30,6 +30,7 @@ from tradier import TradierTrader
 DAY_TRADE = config.DAY_TRADE
 RUN_TRADIER = config.RUN_TRADIER
 RUN_DISCORD = config.RUN_DISCORD
+RUN_LIST = config.RUN_LIST
 RUN_GMAIL = config.RUN_GMAIL
 IS_TESTING = config.IS_TESTING
 TRADE_HEDGES = config.TRADE_HEDGES
@@ -47,6 +48,7 @@ TEST_ANALYSIS_POSITIONS = config.TEST_ANALYSIS_POSITIONS
 RUN_OPENCV = config.RUN_OPENCV
 ITM_OR_OTM = config.ITM_OR_OTM.upper()
 TRADE_SYMBOL = config.TRADE_SYMBOL.upper()
+TICKER_LIST = config.TICKER_LIST
 
 
 class Main(Tasks, TDWebsocket):
@@ -173,6 +175,21 @@ class Main(Tasks, TDWebsocket):
 
                 logging.error(e)
 
+    def get_list_alerts(self, live_trader):
+        alerts = []
+
+        for symbol in TICKER_LIST:
+            for option_type in ['CALL, PUT']:
+                alert = {
+                    'Symbol': symbol,
+                    'Option_Type': option_type,
+                }
+                option_exp_date = helper_functions.find_option_expDate(live_trader, TRADE_SYMBOL)
+                alert['Exp_Date'] = option_exp_date
+                alerts.append(alert)
+
+        return alerts
+
     def get_alerts(self, start_time):
         """ METHOD RUNS THE DISCORD ALERT AND/OR GMAIL ALERT AT EACH INSTANCE.
             newAlerts WILL FILTER OUT THE ALERTS & POPULATE c.OPTIONLIST.
@@ -195,6 +212,10 @@ class Main(Tasks, TDWebsocket):
                     position = mongo_helpers.find_mongo_analysisPosition(self, alert['Pre_Symbol'], alert['Entry_Date'])
                     if position is not True:
                         trade_alerts.append(alert)
+
+        if RUN_LIST:
+            list_alerts = self.get_list_alerts()
+            trade_alerts.append(alert)
 
         return trade_alerts
 

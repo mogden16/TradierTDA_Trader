@@ -67,6 +67,7 @@ TRADE_MULTI_STRIKES = False  # TRADE DIFFERENT STRIKES OF SAME UNDERLYING SYMBOL
 ###################     TECHNICAL ANALYSIS   ####################
 RUN_TA = True
 RUN_SELL_TA = True
+TA_TYPE = "EMA"     # EMA, QQE
 
 
 ############################     TD STREAMING   #################

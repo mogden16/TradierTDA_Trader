@@ -3,10 +3,12 @@ import pandas as pd
 import pandas_ta as ta
 import pytz
 from pyti.hull_moving_average import hull_moving_average as hma
+from pyti.exponential_moving_average import exponential_moving_average as ema
 
 import config
 import tech_config
 
+TA_TYPE = config.TA_TYPE.upper()
 TIMEZONE = config.TIMEZONE
 TRADETYPE = tech_config.TRADETYPE.lower()
 STAMINA = tech_config.STAMINA.lower()
@@ -30,6 +32,12 @@ RSISUPEROVERBOUGHT = tech_config.RSISUPEROVERBOUGHT
 
 SMI_FAST = tech_config.SMI_FAST
 SMI_SLOW = tech_config.SMI_SLOW
+
+EMA_5M_FAST = tech_config.EMA_5M_FAST
+EMA_5M_SLOW = tech_config.EMA_5M_SLOW
+EMA_30M_FAST = tech_config.EMA_30M_FAST
+EMA_30M_SLOW = tech_config.EMA_30M_SLOW
+
 
 def checkActive():
     current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
@@ -177,8 +185,17 @@ def get_TA(value, trader):
                 df_qqe = ta.qqe(df['close'], length=tech_config.QQE_RSI_PERIOD,
                                 smooth=tech_config.QQE_SLOW_FACTOR, factor=tech_config.QQE_SETTING, append=True)
 
+                """ EMA """
+                if agg == 5:
+                    df['ema_5m_slow'] = ema(df['close'], EMA_5M_SLOW)
+                    df['ema_5m_fast'] = ema(df['close'], EMA_5M_FAST)
+
+                elif agg == 30:
+                    df['ema_30m_slow'] = ema(df['close'], EMA_30M_SLOW)
+                    df['ema_30m_fast'] = ema(df['close'], EMA_30M_FAST)
+
                 """ CREATE DATAFRAME """
-                # df = pd.concat([df, df_qqe], axis=1)
+                df = pd.concat([df, df_qqe], axis=1)
                 df['agg'] = agg
                 master_df = pd.concat([master_df, df], axis=0, ignore_index=False)
 
@@ -238,8 +255,8 @@ def buy_criteria(df, value, trader):
 
     current_adr = adr.iloc[-1]
 
-    pRsiMa = df.columns[-4]
-    pFastAtrRsiTL = df.columns[-5]
+    pRsiMa = df.columns[-7]
+    pFastAtrRsiTL = df.columns[-6]
 
     """ SHOW CHART """
     df_5m = df_5m.iloc[-150:]
@@ -323,47 +340,73 @@ def buy_criteria(df, value, trader):
     current_adr = adr.iloc[-1]
 
     if value['Option_Type'].upper() == "CALL":
+        if TA_TYPE == "QQE":
+            if (current_10m_bar['high'] > (current_adr['hl2'] or current_adr['hl1'])) and \
+                    (current_10m_bar['close'] <= (current_adr['hl1'] or current_adr['hl2'])):
+                print(f'called for CALL for {pre_symbol} but in HIGH resistance zone')
 
-        if (current_10m_bar['high'] > (current_adr['hl2'] or current_adr['hl1'])) and \
-                (current_10m_bar['close'] <= (current_adr['hl1'] or current_adr['hl2'])):
-            print(f'called for CALL for {pre_symbol} but in HIGH resistance zone')
+            elif (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and \
+                    (twolast_5m_bar[pRsiMa] < twolast_5m_bar[pFastAtrRsiTL]) and \
+                    (current_30m_bar[pRsiMa] > RSILOWNEUTRAL) and \
+                    (last_10m_bar['hma_fast'] >= last_10m_bar['hma_slow']) and \
+                    (current_30m_bar[pRsiMa] < RSISUPEROVERBOUGHT):
+                message = f"Buying CALL for {pre_symbol} because QQE Cross UP & Current 30m QQE is above 45"
+                # discord_helpers.send_discord_alert(message)
+                print(message)
+                return True
 
-        elif (last_5m_bar[pRsiMa] > last_5m_bar[pFastAtrRsiTL]) and \
-                (twolast_5m_bar[pRsiMa] < twolast_5m_bar[pFastAtrRsiTL]) and \
-                (current_30m_bar[pRsiMa] > RSILOWNEUTRAL) and \
-                (last_10m_bar['hma_fast'] >= last_10m_bar['hma_slow']) and \
-                (current_30m_bar[pRsiMa] < RSISUPEROVERBOUGHT):
-            message = f"Buying CALL for {pre_symbol} because QQE Cross UP & Current 30m QQE is above 45"
-            # discord_helpers.send_discord_alert(message)
-            print(message)
-            return True
+            else:
+                if (current_adr['ll1'] <= current_10m_bar['close'] <= current_adr['ll2']) and (current_30m_bar[pRsiMa] > RSIHIGHNEUTRAL):
+                    message = f"Buying because CALL is at bottom of ADR & 30m QQE is over 55"
+                    # discord_helpers.send_discord_alert(message)
+                    print(message)
+                    return True
 
-        else:
-            if (current_adr['ll1'] <= current_10m_bar['close'] <= current_adr['ll2']) and (current_30m_bar[pRsiMa] > RSIHIGHNEUTRAL):
-                message = f"Buying because CALL is at bottom of ADR & 30m QQE is over 55"
+        elif TA_TYPE == "EMA":
+            if (current_10m_bar['high'] > (current_adr['hl2'] or current_adr['hl1'])) and \
+                    (current_10m_bar['close'] <= (current_adr['hl1'] or current_adr['hl2'])):
+                print(f'called for CALL for {pre_symbol} but in HIGH resistance zone')
+
+            elif (last_5m_bar['ema_5m_fast'] > last_5m_bar['ema_5m_slow']) and \
+                    (twolast_5m_bar['ema_5m_fast'] < twolast_5m_bar['ema_5m_slow']) and \
+                    (current_30m_bar['ema_30m_fast'] > current_30m_bar['ema_30m_slow']):
+                message = f"Buying CALL for {pre_symbol} because QQE Cross UP & Current 30m QQE is above 45"
                 # discord_helpers.send_discord_alert(message)
                 print(message)
                 return True
 
     elif value['Option_Type'].upper() == "PUT":
+        if TA_TYPE == "QQE":
+            if (current_10m_bar['low'] < (current_adr['ll2'] or current_adr['ll1'])) and \
+                    (current_10m_bar['close'] >= (current_adr['ll1'] or current_adr['ll2'])):
+                print(f'called for PUT for {pre_symbol} but in LOW resistance zone')
 
-        if (current_10m_bar['low'] < (current_adr['ll2'] or current_adr['ll1'])) and \
-                (current_10m_bar['close'] >= (current_adr['ll1'] or current_adr['ll2'])):
-            print(f'called for PUT for {pre_symbol} but in LOW resistance zone')
+            elif (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and \
+                    (twolast_5m_bar[pRsiMa] > twolast_5m_bar[pFastAtrRsiTL]) and \
+                    (current_30m_bar[pRsiMa] < RSIHIGHNEUTRAL) and \
+                    (last_10m_bar['hma_fast'] <= last_10m_bar['hma_slow']) and \
+                    (current_30m_bar[pRsiMa] > RSISUPEROVERSOLD):
+                message = f"Buying PUT for {pre_symbol} because QQE Cross DOWN & Current 30m QQE is below 55"
+                # discord_helpers.send_discord_alert(message)
+                print(message)
+                return True
 
-        elif (last_5m_bar[pRsiMa] < last_5m_bar[pFastAtrRsiTL]) and \
-                (twolast_5m_bar[pRsiMa] > twolast_5m_bar[pFastAtrRsiTL]) and \
-                (current_30m_bar[pRsiMa] < RSIHIGHNEUTRAL) and \
-                (last_10m_bar['hma_fast'] <= last_10m_bar['hma_slow']) and \
-                (current_30m_bar[pRsiMa] > RSISUPEROVERSOLD):
-            message = f"Buying PUT for {pre_symbol} because QQE Cross DOWN & Current 30m QQE is below 55"
-            # discord_helpers.send_discord_alert(message)
-            print(message)
-            return True
+            else:
+                if (current_adr['hl1'] <= current_10m_bar['close'] <= current_adr['hl2']) and (current_30m_bar[pRsiMa] < RSILOWNEUTRAL):
+                    message = f"Buying because PUT is at top of ADR & 30m QQE is below 45"
+                    # discord_helpers.send_discord_alert(message)
+                    print(message)
+                    return True
 
-        else:
-            if (current_adr['hl1'] <= current_10m_bar['close'] <= current_adr['hl2']) and (current_30m_bar[pRsiMa] < RSILOWNEUTRAL):
-                message = f"Buying because PUT is at top of ADR & 30m QQE is below 45"
+        elif TA_TYPE == "EMA":
+            if (current_10m_bar['low'] < (current_adr['ll2'] or current_adr['ll1'])) and \
+                    (current_10m_bar['close'] >= (current_adr['ll1'] or current_adr['ll2'])):
+                print(f'called for PUT for {pre_symbol} but in LOW resistance zone')
+
+            elif (last_5m_bar['ema_5m_fast'] < last_5m_bar['ema_5m_slow']) and \
+                    (twolast_5m_bar['ema_5m_fast'] > twolast_5m_bar['ema_5m_slow']) and \
+                    (current_30m_bar['ema_30m_fast'] < current_30m_bar['ema_30m_slow']):
+                message = f"Buying CALL for {pre_symbol} because QQE Cross UP & Current 30m QQE is above 45"
                 # discord_helpers.send_discord_alert(message)
                 print(message)
                 return True
