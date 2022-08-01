@@ -215,10 +215,13 @@ class Main(Tasks, TDWebsocket):
                         trade_alerts.append(alert)
 
         if RUN_LIST:
-            for live_trader in self.traders.values():
-                list_alerts = self.get_list_alerts(live_trader)
-                for alert in list_alerts:
-                    trade_alerts.append(alert)
+            current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
+            """ SCAN EVERY 5m - ("XX:00:XX" or "XX:05:XX) """
+            if current_time[-4] == "0" or current_time[-4] == "5":
+                for live_trader in self.traders.values():
+                        list_alerts = self.get_list_alerts(live_trader)
+                        for alert in list_alerts:
+                            trade_alerts.append(alert)
 
         return trade_alerts
 
@@ -246,9 +249,7 @@ class Main(Tasks, TDWebsocket):
                     alert = {
                         "Symbol": alert['Symbol'],
                         "Side": "BUY_TO_OPEN",
-                        "Pre_Symbol": df1['pre_symbol'],
                         "Exp_Date": alert['Exp_Date'],
-                        "Strike_Price": str(df1['strikePrice']),
                         "Option_Type": alert['Option_Type'],
                         "Strategy": alert['Strategy'],
                         "Asset_Type": "OPTION",
@@ -259,12 +260,15 @@ class Main(Tasks, TDWebsocket):
                 if df1 is None:
                     small_df = td_helpers.getPotentialDF(df)
                     message = f"{small_df} \n" \
-                              f"No possible contracts for {alert['Pre_Symbol']}"
+                              f"No possible contracts for {alert['Symbol']} - {alert['Option_Type']}"
                     print(message)
                     # discord_helpers.send_discord_alert(message)
                     continue
 
                 else:
+                    if alert['Strategy'] == "LIST":
+                        alert['Pre_Symbol'] = df1['pre_symbol']
+                        alert['Strike_Price'] = str(df1['strikePrice'])
                     option_symbol = df1["pre_symbol"]
                     ask = df1["ask"]
                     bid = df1["bid"]
