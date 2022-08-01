@@ -219,12 +219,12 @@ class Main(Tasks, TDWebsocket):
 
         if RUN_LIST:
             current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
-            # """ SCAN EVERY 5m - ("XX:00:XX" or "XX:05:XX) """
-            # if current_time[-4] == "0" or current_time[-4] == "5":
-            for live_trader in self.traders.values():
-                    list_alerts = self.get_list_alerts(live_trader)
-                    for alert in list_alerts:
-                        trade_alerts.append(alert)
+            """ SCAN EVERY 5m - ("XX:00:XX" or "XX:05:XX) """
+            if current_time[-4] == "0" or current_time[-4] == "5":
+                for live_trader in self.traders.values():
+                        list_alerts = self.get_list_alerts(live_trader)
+                        for alert in list_alerts:
+                            trade_alerts.append(alert)
 
         return trade_alerts
 
