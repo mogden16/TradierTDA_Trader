@@ -177,17 +177,20 @@ class Main(Tasks, TDWebsocket):
 
     def get_list_alerts(self, live_trader):
         alerts = []
+        try:
+            for symbol in TICKER_LIST:
+                for option_type in ['CALL', 'PUT']:
+                    alert = {
+                        'Symbol': symbol,
+                        'Option_Type': option_type,
+                        "Strategy": "LIST"
+                    }
+                    option_exp_date = helper_functions.find_option_expDate(live_trader, symbol)
+                    alert['Exp_Date'] = option_exp_date
+                    alerts.append(alert)
 
-        for symbol in TICKER_LIST:
-            for option_type in ['CALL', 'PUT']:
-                alert = {
-                    'Symbol': symbol,
-                    'Option_Type': option_type,
-                    "Strategy": "LIST"
-                }
-                option_exp_date = helper_functions.find_option_expDate(live_trader, TRADE_SYMBOL)
-                alert['Exp_Date'] = option_exp_date
-                alerts.append(alert)
+        except Exception as e:
+            print(e)
 
         return alerts
 
@@ -216,12 +219,12 @@ class Main(Tasks, TDWebsocket):
 
         if RUN_LIST:
             current_time = datetime.now(pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
-            """ SCAN EVERY 5m - ("XX:00:XX" or "XX:05:XX) """
-            if current_time[-4] == "0" or current_time[-4] == "5":
-                for live_trader in self.traders.values():
-                        list_alerts = self.get_list_alerts(live_trader)
-                        for alert in list_alerts:
-                            trade_alerts.append(alert)
+            # """ SCAN EVERY 5m - ("XX:00:XX" or "XX:05:XX) """
+            # if current_time[-4] == "0" or current_time[-4] == "5":
+            for live_trader in self.traders.values():
+                    list_alerts = self.get_list_alerts(live_trader)
+                    for alert in list_alerts:
+                        trade_alerts.append(alert)
 
         return trade_alerts
 
@@ -246,11 +249,20 @@ class Main(Tasks, TDWebsocket):
                     df1 = td_helpers.getSingleOption(df)
 
                 if alert['Strategy'] == "LIST":
+                    if df1 is None:
+
+                        message = f"No possible contracts for {alert['Symbol']} - {alert['Option_Type']}"
+                        print(message)
+                        # discord_helpers.send_discord_alert(message)
+                        continue
+
                     alert = {
                         "Symbol": alert['Symbol'],
+                        "Pre_Symbol": df1['pre_symbol'],
                         "Side": "BUY_TO_OPEN",
                         "Exp_Date": alert['Exp_Date'],
                         "Option_Type": alert['Option_Type'],
+                        "Strike_Price": df1['strikePrice'],
                         "Strategy": alert['Strategy'],
                         "Asset_Type": "OPTION",
                         "HedgeAlert": "FALSE",
@@ -266,9 +278,6 @@ class Main(Tasks, TDWebsocket):
                     continue
 
                 else:
-                    if alert['Strategy'] == "LIST":
-                        alert['Pre_Symbol'] = df1['pre_symbol']
-                        alert['Strike_Price'] = str(df1['strikePrice'])
                     option_symbol = df1["pre_symbol"]
                     ask = df1["ask"]
                     bid = df1["bid"]
