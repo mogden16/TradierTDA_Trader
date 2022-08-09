@@ -17,18 +17,18 @@ path = Path(THIS_FOLDER)
 
 
 class AlertScanner:
-    def __init__(self):
+    def __init__(self, MONITOR_ID, CHART_X_COORDINATE, CHART_Y_COORDINATE, CHART_X2_COORDINATE, CHART_Y2_COORDINATE):
         self.initiation = False
         self.prev_direction = 99999
         self.prev_systemStatus = "RUNNING"
         self.runId = time.strftime("%Y_%m_%d_%H_%M_%S")
         self.threshold = 0.85
 
-        self.monitor_id = config.MONITOR_ID
-        self.chart_x_coordinate = config.CHART_X_COORDINATE
-        self.chart_y_coordinate = config.CHART_Y_COORDINATE
-        self.chart_x2_coordinate = config.CHART_X2_COORDINATE
-        self.chart_y2_coordinate = config.CHART_Y2_COORDINATE
+        self.monitor_id = MONITOR_ID
+        self.chart_x_coordinate = CHART_X_COORDINATE
+        self.chart_y_coordinate = CHART_Y_COORDINATE
+        self.chart_x2_coordinate = CHART_X2_COORDINATE
+        self.chart_y2_coordinate = CHART_Y2_COORDINATE
         self.chart_width = self.chart_x2_coordinate-self.chart_x_coordinate
         self.chart_height = self.chart_y2_coordinate-self.chart_y_coordinate
 

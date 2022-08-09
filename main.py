@@ -47,7 +47,6 @@ TEST_CLOSED_POSITIONS = config.TEST_CLOSED_POSITIONS
 TEST_ANALYSIS_POSITIONS = config.TEST_ANALYSIS_POSITIONS
 RUN_OPENCV = config.RUN_OPENCV
 ITM_OR_OTM = config.ITM_OR_OTM.upper()
-TRADE_SYMBOL = config.TRADE_SYMBOL.upper()
 TICKER_LIST = config.TICKER_LIST
 
 
@@ -419,8 +418,8 @@ class Main(Tasks, TDWebsocket):
                 if isRunner != "TRUE":
                     option_type = "CALL" if signal_type == "BUY" else "PUT"
 
-                option_exp_date = helper_functions.find_option_expDate(live_trader, TRADE_SYMBOL)
-                df = td_helpers.getOptionChain(live_trader, TRADE_SYMBOL, option_type, option_exp_date)
+                option_exp_date = helper_functions.find_option_expDate(live_trader, value['Symbol'])
+                df = td_helpers.getOptionChain(live_trader, value['Symbol'], option_type, option_exp_date)
 
                 if isRunner == "TRUE":
                     value = td_helpers.getSingleOption(df, isRunner=True)
@@ -430,7 +429,7 @@ class Main(Tasks, TDWebsocket):
                 if value is None:
                     small_df = td_helpers.getPotentialDF(df)
                     message = f'{small_df} \n' \
-                              f'No possible {option_type} contracts for {TRADE_SYMBOL}'
+                              f'No possible {option_type} contracts for {value["Symbol"]}'
                     # discord_helpers.send_discord_alert(message)
                     print(message)
                     return None
@@ -444,7 +443,7 @@ class Main(Tasks, TDWebsocket):
                             volume))
 
                 obj = {
-                    "Symbol": TRADE_SYMBOL,
+                    "Symbol": value["Symbol"],
                     "Side": "BUY_TO_OPEN",
                     "Pre_Symbol": option_symbol,
                     "Exp_Date": option_exp_date,
@@ -507,7 +506,26 @@ class Main(Tasks, TDWebsocket):
         """  THIS RUNS THE TD INSTANCE  """
         self.setupTraders()
 
-        alertScanner = AlertScanner.AlertScanner()
+        alertScanner1 = AlertScanner.AlertScanner(config.MONITOR_ID1,
+                                                 config.CHART_X_COORDINATE1,
+                                                 config.CHART_Y_COORDINATE1,
+                                                 config.CHART_X2_COORDINATE1,
+                                                 config.CHART_Y2_COORDINATE1)
+        alertScanner2 = AlertScanner.AlertScanner(config.MONITOR_ID1,
+                                                 config.CHART_X_COORDINATE2,
+                                                 config.CHART_Y_COORDINATE2,
+                                                 config.CHART_X2_COORDINATE2,
+                                                 config.CHART_Y2_COORDINATE2)
+        alertScanner3 = AlertScanner.AlertScanner(config.MONITOR_ID3,
+                                                 config.CHART_X_COORDINATE3,
+                                                 config.CHART_Y_COORDINATE3,
+                                                 config.CHART_X2_COORDINATE3,
+                                                 config.CHART_Y2_COORDINATE3)
+        alertScanner4 = AlertScanner.AlertScanner(config.MONITOR_ID4,
+                                                 config.CHART_X_COORDINATE4,
+                                                 config.CHART_Y_COORDINATE4,
+                                                 config.CHART_X2_COORDINATE4,
+                                                 config.CHART_Y2_COORDINATE4)
         initiation = False
         SHUT_DOWN = False
         current_trend = None
@@ -586,7 +604,7 @@ class Main(Tasks, TDWebsocket):
                             if len(open_positions) == 0:
                                 pass
                             else:
-                                for open_position in tqdm(open_positions, desc="Scanning SELL signals..."):
+                                for open_position in tqdm(open_positions, desc="Scanning SELL signals (non Open_CV only)..."):
                                     if open_position['Strategy'] == "OpenCV":
                                         continue
                                     df = techanalysis.get_TA(open_position, api_trader)
@@ -611,43 +629,14 @@ class Main(Tasks, TDWebsocket):
             """" 
             RUN OPENCV FOR config.TRADE_SYMBOL ONLY 
             """
-            if RUN_OPENCV and not SHUT_DOWN:
-                switcher = {
-                    "BUY": "CALL",
-                    "SELL": "PUT",
-                    "CLOSE": 0,
-                    "Not Available": 99999
-                }
-
-                trade_signal = alertScanner.scanVisualAlerts()
-                if config.GIVE_CONTINUOUS_UPDATES:
-                    print(f'current_trend: {trade_signal}')
-                new_trend = switcher.get(trade_signal)
-                if initiation is False:
-                    current_trend = new_trend
-                    initiation = True
-
-                elif trade_signal == "Not Available":
-                    current_trend = new_trend
-
-                elif trade_signal is not None and new_trend != current_trend:
-                    message = f'TradingBOT just saw a possible trade: {trade_signal}'
-                    discord_helpers.send_discord_alert(message)
-                    print(message)
-
-                    tos_signal = run_opencv.run(alertScanner, new_trend)
-                    if tos_signal:
-                        value = {
-                            "Symbol": TRADE_SYMBOL,
-                            "Strategy": "OpenCV",
-                            "Option_Type": trade_signal
-                        }
-                        for api_trader in self.traders.values():
-                            df = techanalysis.get_TA(value, api_trader)
-                            signal = techanalysis.openCV_criteria(df, value, api_trader)
-                            if signal:
-                                self.set_trader(value, trade_signal=trade_signal, trade_type="LIMIT")
-                                current_trend = new_trend
+            scan1 = run_opencv.main(SHUT_DOWN, alertScanner1, initiation, self, techanalysis, current_trend,
+                                    config.TRADE_SYMBOL1)
+            scan2 = run_opencv.main(SHUT_DOWN, alertScanner2, initiation, self, techanalysis, current_trend,
+                                    config.TRADE_SYMBOL1)
+            scan3 = run_opencv.main(SHUT_DOWN, alertScanner3, initiation, self, techanalysis, current_trend,
+                                    config.TRADE_SYMBOL3)
+            scan4 = run_opencv.main(SHUT_DOWN, alertScanner4, initiation, self, techanalysis, current_trend,
+                                    config.TRADE_SYMBOL3)
 
             """  
             USE WEBSOCKET TO PRINT CURRENT PRICES - IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT  
