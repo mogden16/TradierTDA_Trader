@@ -58,11 +58,8 @@ def main(SHUT_DOWN, alertScanner, initiation, self, techanalysis, current_trend,
         if config.GIVE_CONTINUOUS_UPDATES:
             print(f'current_trend: {trade_signal}')
         new_trend = switcher.get(trade_signal)
-        if initiation is False:
-            current_trend = new_trend
-            initiation = True
 
-        elif trade_signal == "Not Available":
+        if trade_signal == "Not Available":
             current_trend = new_trend
 
         elif trade_signal is not None and new_trend != current_trend:

@@ -528,7 +528,10 @@ class Main(Tasks, TDWebsocket):
                                                  config.CHART_Y2_COORDINATE4)
         initiation = False
         SHUT_DOWN = False
-        current_trend = None
+        current_trend1 = None
+        current_trend2 = None
+        current_trend3 = None
+        current_trend4 = None
 
         while connected:
 
@@ -629,14 +632,19 @@ class Main(Tasks, TDWebsocket):
             """" 
             RUN OPENCV FOR config.TRADE_SYMBOL ONLY 
             """
-            scan1 = run_opencv.main(SHUT_DOWN, alertScanner1, initiation, self, techanalysis, current_trend,
+            scan1 = run_opencv.main(SHUT_DOWN, alertScanner1, initiation, self, techanalysis, current_trend1,
                                     config.TRADE_SYMBOL1)
-            scan2 = run_opencv.main(SHUT_DOWN, alertScanner2, initiation, self, techanalysis, current_trend,
+            scan2 = run_opencv.main(SHUT_DOWN, alertScanner2, initiation, self, techanalysis, current_trend2,
                                     config.TRADE_SYMBOL1)
-            scan3 = run_opencv.main(SHUT_DOWN, alertScanner3, initiation, self, techanalysis, current_trend,
+            scan3 = run_opencv.main(SHUT_DOWN, alertScanner3, initiation, self, techanalysis, current_trend3,
                                     config.TRADE_SYMBOL3)
-            scan4 = run_opencv.main(SHUT_DOWN, alertScanner4, initiation, self, techanalysis, current_trend,
+            scan4 = run_opencv.main(SHUT_DOWN, alertScanner4, initiation, self, techanalysis, current_trend4,
                                     config.TRADE_SYMBOL3)
+
+            current_trend1 = scan1
+            current_trend2 = scan2
+            current_trend3 = scan3
+            current_trend4 = scan4
 
             """  
             USE WEBSOCKET TO PRINT CURRENT PRICES - IF STRATEGY USES WEBSOCKET, IT MIGHT SELL OUT USING IT  

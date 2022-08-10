@@ -71,7 +71,7 @@ class AlertScanner:
         }
 
         longArrowImg = cv2.imread('./img/Long_Arrow.png')
-        shortArrowImg = cv2.imread('./img/Short_Arrow.png')
+        shortArrowImg = cv2.imread('./img/Short_Take_Profit.png')
         exitDownArrowImg = cv2.imread('./img/Close_Down_Arrow.png')
         exitUpArrowImg = cv2.imread('./img/Close_Up_Arrow.png')
         w = longArrowImg.shape[1]
