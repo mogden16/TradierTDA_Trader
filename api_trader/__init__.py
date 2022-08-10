@@ -563,6 +563,8 @@ class ApiTrader(OrderBuilder):
 
         pre_symbol = row["Pre_Symbol"]
 
+        option_type = row['Option_Type']
+
         # CHECK OPEN POSITIONS AND QUEUE
         if TRADE_MULTI_STRIKES:
             open_position = self.open_positions.find_one(
@@ -573,11 +575,11 @@ class ApiTrader(OrderBuilder):
 
         else:
             open_position = self.open_positions.find_one(
-                {"Trader": self.user["Name"], "Symbol": symbol,
+                {"Trader": self.user["Name"], "Symbol": symbol, "Option_Type": option_type,
                  "Account_ID": self.account_id})
 
             queued = self.queue.find_one(
-                {"Trader": self.user["Name"], "Symbol": symbol,
+                {"Trader": self.user["Name"], "Symbol": symbol, "Option_Type": option_type,
                  "Account_ID": self.account_id})
 
         strategy_object = self.strategies.find_one(

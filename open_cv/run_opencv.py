@@ -9,7 +9,7 @@ ITM_OR_OTM = config.ITM_OR_OTM
 RUN_OPENCV = config.RUN_OPENCV
 
 
-def run(alertScanner, current_trend):
+def run(alertScanner, current_trend, chart):
     switcher = {
         "BUY": "CALL",
         "SELL": "PUT",
@@ -25,6 +25,8 @@ def run(alertScanner, current_trend):
         time.sleep(SLEEP_AFTER_SCAN)
 
         trade_signal = alertScanner.scanVisualAlerts()
+        if (chart == 'chart2' or chart == 'chart4') and trade_signal == "BUY":
+            trade_signal = "SELL"
         new_trend = switcher.get(trade_signal)
 
         if new_trend == 99999:
@@ -45,7 +47,7 @@ def run(alertScanner, current_trend):
             return False
 
 
-def main(SHUT_DOWN, alertScanner, initiation, self, techanalysis, current_trend, TRADE_SYMBOL):
+def main(SHUT_DOWN, alertScanner, self, techanalysis, current_trend, trade_symbol, chart):
     if RUN_OPENCV and not SHUT_DOWN:
         switcher = {
             "BUY": "CALL",
@@ -55,6 +57,8 @@ def main(SHUT_DOWN, alertScanner, initiation, self, techanalysis, current_trend,
         }
 
         trade_signal = alertScanner.scanVisualAlerts()
+        if (chart == 'chart2' or chart == 'chart4') and trade_signal == "BUY":
+            trade_signal = "SELL"
         if config.GIVE_CONTINUOUS_UPDATES:
             print(f'current_trend: {trade_signal}')
         new_trend = switcher.get(trade_signal)
@@ -67,10 +71,10 @@ def main(SHUT_DOWN, alertScanner, initiation, self, techanalysis, current_trend,
             discord_helpers.send_discord_alert(message)
             print(message)
 
-            tos_signal = run(alertScanner, new_trend)
+            tos_signal = run(alertScanner, new_trend, chart)
             if tos_signal:
                 value = {
-                    "Symbol": TRADE_SYMBOL,
+                    "Symbol": trade_symbol,
                     "Strategy": "OpenCV",
                     "Option_Type": trade_signal
                 }

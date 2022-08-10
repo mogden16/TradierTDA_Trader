@@ -347,6 +347,7 @@ class Main(Tasks, TDWebsocket):
             return trade_data
 
         if isRunner == "TRUE":
+            prev_order = value
             for api_trader in self.traders.values():
                 strategy = value['Strategy']
                 exp_date = value['Exp_Date']
@@ -367,6 +368,8 @@ class Main(Tasks, TDWebsocket):
                 value['Strategy'] = strategy
                 value['Exp_Date'] = exp_date
                 value['Symbol'] = symbol
+
+
         position = live_trader.open_positions.find_one(
             {"Trader": live_trader.user["Name"], "Symbol": value['Symbol'], "Strategy": value['Strategy']})
 
@@ -415,8 +418,7 @@ class Main(Tasks, TDWebsocket):
                 trade_data.append(obj)
 
             else:
-                if isRunner != "TRUE":
-                    option_type = "CALL" if signal_type == "BUY" else "PUT"
+                option_type = "CALL" if signal_type == "BUY" else "PUT"
 
                 option_exp_date = helper_functions.find_option_expDate(live_trader, value['Symbol'])
                 df = td_helpers.getOptionChain(live_trader, value['Symbol'], option_type, option_exp_date)
@@ -426,24 +428,22 @@ class Main(Tasks, TDWebsocket):
                 else:
                     value = td_helpers.getSingleOption(df)
 
-                symbol = value["pre_symbol"].split("_")
-                symbol = symbol[0]
-
                 if value is None:
                     small_df = td_helpers.getPotentialDF(df)
                     message = f'{small_df} \n' \
-                              f'No possible {option_type} contracts for {symbol}'
+                              f'No possible {option_type} contracts for {value["Symbol"]}'
                     # discord_helpers.send_discord_alert(message)
                     print(message)
                     return None
 
                 option_symbol = value["pre_symbol"]
+                symbol = option_symbol.split('_')[0]
                 last = value["last"]
                 volume = value["totalVolume"]
                 delta = value["delta"]
                 oi = value["openInterest"]
                 print(option_symbol + " --> mark=" + str(last) + " delta=" + str(delta) + " volume=" + str(
-                            volume))
+                    volume))
 
                 obj = {
                     "Symbol": symbol,
@@ -635,14 +635,14 @@ class Main(Tasks, TDWebsocket):
             """" 
             RUN OPENCV FOR config.TRADE_SYMBOL ONLY 
             """
-            scan1 = run_opencv.main(SHUT_DOWN, alertScanner1, initiation, self, techanalysis, current_trend1,
-                                    config.TRADE_SYMBOL1)
-            scan2 = run_opencv.main(SHUT_DOWN, alertScanner2, initiation, self, techanalysis, current_trend2,
-                                    config.TRADE_SYMBOL1)
-            scan3 = run_opencv.main(SHUT_DOWN, alertScanner3, initiation, self, techanalysis, current_trend3,
-                                    config.TRADE_SYMBOL3)
-            scan4 = run_opencv.main(SHUT_DOWN, alertScanner4, initiation, self, techanalysis, current_trend4,
-                                    config.TRADE_SYMBOL3)
+            scan1 = run_opencv.main(SHUT_DOWN, alertScanner1, self, techanalysis, current_trend1,
+                                    config.TRADE_SYMBOL1, 'chart1')
+            scan2 = run_opencv.main(SHUT_DOWN, alertScanner2, self, techanalysis, current_trend2,
+                                    config.TRADE_SYMBOL1, 'chart2')
+            scan3 = run_opencv.main(SHUT_DOWN, alertScanner3, self, techanalysis, current_trend3,
+                                    config.TRADE_SYMBOL3, 'chart3')
+            scan4 = run_opencv.main(SHUT_DOWN, alertScanner4, self, techanalysis, current_trend4,
+                                    config.TRADE_SYMBOL3, 'chart4')
 
             current_trend1 = scan1
             current_trend2 = scan2

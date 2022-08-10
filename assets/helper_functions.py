@@ -71,7 +71,7 @@ def selectSleep():
         return 5
 
     # ELSE RETURN 1 SECOND
-    return 5
+    return 1
 
 
 def modifiedAccountID(account_id):

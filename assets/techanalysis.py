@@ -179,6 +179,8 @@ def get_TA(value, trader):
                 df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
                 df = df.set_index('datetime')
 
+                if df.empty:
+                    continue
                 """ HULL EMA """
                 df['hma_fast'] = hma(df['close'], tech_config.HULL_FAST)
                 df['hma_slow'] = hma(df['close'], tech_config.HULL_SLOW)
