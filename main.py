@@ -426,10 +426,13 @@ class Main(Tasks, TDWebsocket):
                 else:
                     value = td_helpers.getSingleOption(df)
 
+                symbol = value["pre_symbol"].split("_")
+                symbol = symbol[0]
+
                 if value is None:
                     small_df = td_helpers.getPotentialDF(df)
                     message = f'{small_df} \n' \
-                              f'No possible {option_type} contracts for {value["Symbol"]}'
+                              f'No possible {option_type} contracts for {symbol}'
                     # discord_helpers.send_discord_alert(message)
                     print(message)
                     return None
@@ -443,7 +446,7 @@ class Main(Tasks, TDWebsocket):
                             volume))
 
                 obj = {
-                    "Symbol": value["Symbol"],
+                    "Symbol": symbol,
                     "Side": "BUY_TO_OPEN",
                     "Pre_Symbol": option_symbol,
                     "Exp_Date": option_exp_date,
