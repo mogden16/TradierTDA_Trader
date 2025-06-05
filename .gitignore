@@ -4,6 +4,7 @@ config.py
 .vscode
 *__pycache__
 *.txt
+!requirements.txt
 .VSCodeCounter
 token.json
 credentials.json
